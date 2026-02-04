@@ -21,7 +21,9 @@ export type ProfileSubScreen =
   | "ADMIN_DASHBOARD"
   | "ADMIN_ORDERS"
   | "ADMIN_PRODUCTS"
-  | "ADMIN_OFFERS";
+  | "ADMIN_OFFERS"
+  | "ADMIN_CUSTOMERS"
+  | "ADMIN_CUSTOMER_DETAIL";
 
 interface NavigationState {
   currentScreen: "LOGIN" | "REGISTER" | "MAIN";
@@ -31,6 +33,7 @@ interface NavigationState {
   isViewingCheckout: boolean;
   isViewingTracking: boolean;
   selectedOrderForTracking: any | null;
+  selectedAdminCustomer: any | null;
   navigationOrigin: "CART" | "CHECKOUT" | "PROFILE" | null;
   profileSubScreen: ProfileSubScreen;
   editingPayment: any | null;
@@ -51,6 +54,7 @@ interface NavigationState {
   
   // Helpers
   resetToMain: () => void;
+  setSelectedAdminCustomer: (customer: any | null) => void;
   goBack: () => boolean; // Returns true if it handled back, false if it should exit
 }
 
@@ -62,6 +66,7 @@ export const useNavigationStore = create<NavigationState>((set, get) => ({
   isViewingCheckout: false,
   isViewingTracking: false,
   selectedOrderForTracking: null,
+  selectedAdminCustomer: null,
   navigationOrigin: null,
   profileSubScreen: "ROOT",
   editingPayment: null,
@@ -91,6 +96,7 @@ export const useNavigationStore = create<NavigationState>((set, get) => ({
     editingAddress: null,
   }),
 
+  setSelectedAdminCustomer: (customer) => set({ selectedAdminCustomer: customer }),
   goBack: () => {
     const state = get();
 
@@ -121,6 +127,10 @@ export const useNavigationStore = create<NavigationState>((set, get) => ({
         set({ profileSubScreen: "ADDRESSES", editingAddress: null });
       } else if (state.profileSubScreen === "SELECT_LOCATION") {
         set({ profileSubScreen: "EDIT_ADDRESS" });
+      } else if (state.profileSubScreen === "ADMIN_CUSTOMER_DETAIL") {
+        set({ profileSubScreen: "ADMIN_CUSTOMERS", selectedAdminCustomer: null });
+      } else if (state.profileSubScreen === "ADMIN_ORDERS" || state.profileSubScreen === "ADMIN_PRODUCTS" || state.profileSubScreen === "ADMIN_OFFERS" || state.profileSubScreen === "ADMIN_CUSTOMERS") {
+        set({ profileSubScreen: "ADMIN_DASHBOARD" });
       } else {
         if (state.navigationOrigin === "CHECKOUT") {
           set({ navigationOrigin: null, profileSubScreen: "ROOT", isViewingCart: true, isViewingCheckout: true });

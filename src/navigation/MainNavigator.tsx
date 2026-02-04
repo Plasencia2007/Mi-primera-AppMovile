@@ -33,6 +33,9 @@ import { ActiveOrdersScreen } from "../features/profile/screens/ActiveOrdersScre
 // Admin
 import { AdminDashboard } from "../features/admin/screens/AdminDashboard";
 import { AdminOrdersScreen } from "../features/admin/screens/AdminOrdersScreen";
+import { AdminCustomersScreen } from "../features/admin/screens/AdminCustomersScreen";
+import { AdminCustomerDetailScreen } from "../features/admin/screens/AdminCustomerDetailScreen";
+import { AdminProductsScreen } from "../features/admin/screens/AdminProductsScreen";
 
 interface MainNavigatorProps {
   handleLogout: () => Promise<void>;
@@ -56,6 +59,8 @@ export const MainNavigator = ({
     setIsViewingTracking,
     selectedOrderForTracking,
     setSelectedOrderForTracking,
+    selectedAdminCustomer,
+    setSelectedAdminCustomer,
     navigationOrigin,
     setNavigationOrigin,
     profileSubScreen,
@@ -362,6 +367,34 @@ export const MainNavigator = ({
               onViewAllOrders={() => setProfileSubScreen("ADMIN_ORDERS")}
               onNavigateToProducts={() => setProfileSubScreen("ADMIN_PRODUCTS")}
               onNavigateToOffers={() => setProfileSubScreen("ADMIN_OFFERS")}
+              onNavigateToCustomers={() =>
+                setProfileSubScreen("ADMIN_CUSTOMERS")
+              }
+              onExit={() => setProfileSubScreen("ROOT")}
+            />
+          );
+        case "ADMIN_CUSTOMERS":
+          return (
+            <AdminCustomersScreen
+              onBack={() => setProfileSubScreen("ADMIN_DASHBOARD")}
+              onSelectCustomer={(customer) => {
+                setSelectedAdminCustomer(customer);
+                setProfileSubScreen("ADMIN_CUSTOMER_DETAIL");
+              }}
+            />
+          );
+        case "ADMIN_CUSTOMER_DETAIL":
+          return (
+            <AdminCustomerDetailScreen
+              customerId={selectedAdminCustomer?.id}
+              onBack={() => {
+                setSelectedAdminCustomer(null);
+                setProfileSubScreen("ADMIN_CUSTOMERS");
+              }}
+              onViewOrder={(orderId) => {
+                // Future: jump to order detail
+                console.log("Viewing order:", orderId);
+              }}
             />
           );
         case "ADMIN_ORDERS":
@@ -372,22 +405,9 @@ export const MainNavigator = ({
           );
         case "ADMIN_PRODUCTS":
           return (
-            <View
-              style={{
-                flex: 1,
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              <Text>Pronto galería de productos...</Text>
-              <TouchableOpacity
-                onPress={() => setProfileSubScreen("ADMIN_DASHBOARD")}
-              >
-                <Text style={{ color: colors.primary, marginTop: 20 }}>
-                  Volver
-                </Text>
-              </TouchableOpacity>
-            </View>
+            <AdminProductsScreen
+              onBack={() => setProfileSubScreen("ADMIN_DASHBOARD")}
+            />
           );
         case "ADMIN_OFFERS":
           return (

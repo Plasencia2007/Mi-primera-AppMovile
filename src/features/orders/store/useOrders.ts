@@ -15,6 +15,7 @@ interface OrdersState {
     notes?: string
   ) => Promise<{ success: boolean; orderId?: string; error?: string }>;
   cancelOrder: (orderId: string) => Promise<{ success: boolean; error?: string }>;
+  subscribeToOrders: () => () => void;
 }
 
 export const useOrders = create<OrdersState>((set, get) => ({
@@ -162,5 +163,25 @@ export const useOrders = create<OrdersState>((set, get) => ({
       set({ isLoading: false });
       return { success: false, error: error.message };
     }
+  },
+
+  subscribeToOrders: () => {
+    const { data: { user } } = (supabase.auth as any).session?.() || { data: { user: null } };
+    
+    // We'll use a safer way to get user since we are in a store
+    const subscription = supabase
+      .channel('client-orders')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'orders' 
+      }, () => {
+        get().fetchOrders();
+      })
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   },
 }));

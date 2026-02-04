@@ -6,7 +6,7 @@ export interface OrderItem {
   image?: any;
 }
 
-export type OrderStatus = 'Entregado' | 'En camino' | 'Cancelado' | 'Pendiente';
+export type OrderStatus = 'Entregado' | 'En camino' | 'Cancelado' | 'Pendiente' | 'Preparando';
 
 export interface Order {
   id: string;

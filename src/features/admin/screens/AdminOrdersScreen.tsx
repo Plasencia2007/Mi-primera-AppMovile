@@ -10,7 +10,13 @@ import {
   AlertButton,
   ActivityIndicator,
   Linking,
+  StatusBar,
+  TextInput,
+  Image,
+  Modal,
+  Pressable,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ArrowLeft,
   Filter,
@@ -26,238 +32,510 @@ import {
   XCircle,
   MessageSquare,
   DollarSign,
+  User,
+  Calendar,
+  ExternalLink,
 } from "lucide-react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { colors, spacing } from "../../../theme";
 import { useAdmin, AdminOrder } from "../store/useAdmin";
 import { OrderStatus } from "../../../types/order.types";
+import { useNotification } from "../../../store/useNotification";
 
 interface AdminOrdersScreenProps {
   onBack: () => void;
 }
 
 export const AdminOrdersScreen = ({ onBack }: AdminOrdersScreenProps) => {
-  const { orders, fetchAdminOrders, updateOrderStatus, isLoading } = useAdmin();
-  const [filter, setFilter] = useState<OrderStatus | "Todos">("Todos");
+  const insets = useSafeAreaInsets();
+  const {
+    orders,
+    fetchAdminOrders,
+    updateOrderStatus,
+    subscribeToOrders,
+    isLoading,
+  } = useAdmin();
+  const showNotification = useNotification((state) => state.showNotification);
+  const [filter, setFilter] = useState<OrderStatus | "Todos" | "Activos">(
+    "Activos",
+  );
+  const [searchQuery, setSearchQuery] = useState("");
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
+  const [statusModalVisible, setStatusModalVisible] = useState(false);
+  const [orderToUpdate, setOrderToUpdate] = useState<{
+    id: string;
+    currentStatus: OrderStatus;
+  } | null>(null);
+
+  const STATUS_FLOW: OrderStatus[] = [
+    "Pendiente",
+    "Preparando",
+    "En camino",
+    "Entregado",
+    "Cancelado",
+  ];
 
   useEffect(() => {
     fetchAdminOrders();
+    const unsubscribe = subscribeToOrders();
+    return () => unsubscribe();
   }, []);
 
-  const filteredOrders =
-    filter === "Todos" ? orders : orders.filter((o) => o.status === filter);
+  const toggleOrderExpansion = (orderId: string) => {
+    const newExpanded = new Set(expandedOrders);
+    if (newExpanded.has(orderId)) {
+      newExpanded.delete(orderId);
+    } else {
+      newExpanded.add(orderId);
+    }
+    setExpandedOrders(newExpanded);
+  };
+
+  const filteredOrders = orders.filter((o) => {
+    let matchesFilter = false;
+    if (filter === "Todos") {
+      matchesFilter = true;
+    } else if (filter === "Activos") {
+      matchesFilter = o.status !== "Entregado" && o.status !== "Cancelado";
+    } else {
+      matchesFilter = o.status === filter;
+    }
+    const matchesSearch =
+      o.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      o.customerName.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesFilter && matchesSearch;
+  });
 
   const handleUpdateStatus = (orderId: string, currentStatus: OrderStatus) => {
-    const statuses: OrderStatus[] = [
-      "Pendiente",
-      "Preparando" as any,
-      "En camino",
-      "Entregado",
-      "Cancelado",
-    ];
+    setOrderToUpdate({ id: orderId, currentStatus });
+    setStatusModalVisible(true);
+  };
 
-    // In our types Preparando might not exist yet, let's stick to the ones we have or update types later
-    // For now: Pendiente -> En camino -> Entregado
-    const nextStatuses: OrderStatus[] = [
-      "Pendiente",
-      "En camino",
-      "Entregado",
-      "Cancelado",
-    ];
+  const confirmStatusUpdate = async (newStatus: OrderStatus) => {
+    if (!orderToUpdate) return;
 
-    const buttons: AlertButton[] = nextStatuses.map((status) => ({
-      text: status,
-      onPress: () => updateOrderStatus(orderId, status),
-      style: status === "Cancelado" ? "destructive" : "default",
-    }));
+    try {
+      await updateOrderStatus(orderToUpdate.id, newStatus);
+      setStatusModalVisible(false);
+      setOrderToUpdate(null);
+    } catch (error) {
+      Alert.alert("Error", "No se pudo actualizar el estado");
+    }
+  };
 
-    buttons.push({ text: "Cancelar", style: "cancel" });
-
-    Alert.alert(
-      "Actualizar Estado",
-      "Selecciona el nuevo estado del pedido:",
-      buttons,
-    );
+  const getStatusColor = (status: OrderStatus) => {
+    switch (status) {
+      case "Pendiente":
+        return "#F59E0B";
+      case "Preparando":
+        return "#6366F1";
+      case "En camino":
+        return "#0EA5E9";
+      case "Entregado":
+        return "#10B981";
+      case "Cancelado":
+        return "#EF4444";
+      default:
+        return "#94A3B8";
+    }
   };
 
   const StatusIcon = ({ status }: { status: OrderStatus }) => {
+    const color = getStatusColor(status);
     switch (status) {
       case "Pendiente":
-        return <Clock size={16} color="#F59E0B" />;
+        return <Clock size={14} color={color} />;
+      case "Preparando":
+        return <Package size={14} color={color} />;
       case "En camino":
-        return <Truck size={16} color={colors.primary} />;
+        return <Truck size={14} color={color} />;
       case "Entregado":
-        return <CheckCircle2 size={16} color="#10B981" />;
+        return <CheckCircle2 size={14} color={color} />;
       case "Cancelado":
-        return <XCircle size={16} color="#EF4444" />;
+        return <XCircle size={14} color={color} />;
       default:
         return null;
     }
   };
 
+  const getStatusGradient = (status: OrderStatus): [string, string] => {
+    switch (status) {
+      case "Pendiente":
+        return ["#F59E0B", "#D97706"];
+      case "Preparando":
+        return ["#6366F1", "#4F46E5"];
+      case "En camino":
+        return ["#0EA5E9", "#0284C7"];
+      case "Entregado":
+        return ["#10B981", "#059669"];
+      case "Cancelado":
+        return ["#EF4444", "#DC2626"];
+      default:
+        return ["#94A3B8", "#64748B"];
+    }
+  };
+
   return (
     <View style={styles.container}>
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor="#FFFFFF"
+        translucent
+      />
+
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <ArrowLeft size={28} color="#1E293B" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>GESTIÓN DE PEDIDOS</Text>
-        <TouchableOpacity style={styles.filterButton}>
-          <Filter size={24} color={colors.primary} />
-        </TouchableOpacity>
+      <View style={styles.compactHeader}>
+        <View style={styles.compactHeaderTop}>
+          <TouchableOpacity onPress={onBack} style={styles.backBtnMini}>
+            <ArrowLeft size={22} color="#1E293B" />
+          </TouchableOpacity>
+          <Text style={styles.compactTitle}>Gestión de Pedidos</Text>
+          <View style={styles.badgeMini}>
+            <Text style={styles.badgeTextMini}>{filteredOrders.length}</Text>
+          </View>
+        </View>
+
+        <View style={styles.compactSearchSection}>
+          <View style={styles.compactSearchBar}>
+            <Search size={16} color="#94A3B8" />
+            <TextInput
+              style={styles.compactSearchInput}
+              placeholder="Buscar por ID, cliente..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholderTextColor="#94A3B8"
+            />
+          </View>
+        </View>
       </View>
 
-      {/* Filter Tabs */}
-      <View style={styles.tabsContainer}>
+      {/* Modern Filter Tabs */}
+      <View style={styles.filterSection}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabsScroll}
+          contentContainerStyle={styles.filterTabsScroll}
         >
-          {["Todos", "Pendiente", "En camino", "Entregado", "Cancelado"].map(
-            (item) => (
-              <TouchableOpacity
-                key={item}
-                onPress={() => setFilter(item as any)}
-                style={[styles.tab, filter === item && styles.activeTab]}
+          {[
+            "Activos",
+            "Todos",
+            "Pendiente",
+            "Preparando",
+            "En camino",
+            "Entregado",
+            "Cancelado",
+          ].map((item) => (
+            <TouchableOpacity
+              key={item}
+              onPress={() => setFilter(item as any)}
+              style={[
+                styles.filterTab,
+                filter === item && styles.activeFilterTab,
+                filter === item && {
+                  backgroundColor:
+                    getStatusColor(item as any) || colors.primary,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.filterTabText,
+                  filter === item && styles.activeFilterTabText,
+                ]}
               >
-                <Text
-                  style={[
-                    styles.tabText,
-                    filter === item && styles.activeTabText,
-                  ]}
-                >
-                  {item}
-                </Text>
-              </TouchableOpacity>
-            ),
-          )}
+                {item}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </ScrollView>
       </View>
 
       {isLoading ? (
-        <View style={styles.loading}>
+        <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>
+            Cargando pedidos en tiempo real...
+          </Text>
         </View>
       ) : (
         <ScrollView
-          style={styles.ordersList}
-          contentContainerStyle={styles.ordersContent}
+          style={styles.contentScroll}
+          contentContainerStyle={styles.contentPadding}
           showsVerticalScrollIndicator={false}
         >
-          {filteredOrders.map((order) => (
-            <View key={order.id} style={styles.orderCard}>
-              <View style={styles.cardHeader}>
-                <View>
-                  <Text style={styles.orderId}>{order.id}</Text>
-                  <Text style={styles.orderDate}>
-                    {new Date(order.date).toLocaleString("es-PE")}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => handleUpdateStatus(order.id, order.status)}
-                  style={[styles.statusBadge, styles[`status${order.status}`]]}
+          {filteredOrders.map((order) => {
+            const isExpanded = expandedOrders.has(order.id);
+            return (
+              <View key={order.id} style={styles.modernOrderCard}>
+                {/* Card Header: Order Meta */}
+                <View
+                  style={[
+                    styles.modernCardHeader,
+                    { marginBottom: isExpanded ? 20 : 12 },
+                  ]}
                 >
-                  <StatusIcon status={order.status} />
-                  <Text
-                    style={[styles.statusText, styles[`text${order.status}`]]}
+                  <View style={styles.orderMetadata}>
+                    <View style={styles.idContainer}>
+                      <Text style={styles.idPrefix}>PEDIDO</Text>
+                      <Text style={styles.idMain}>
+                        #{order.id.slice(0, 8).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={styles.timestampRow}>
+                      <Clock size={12} color="#94A3B8" />
+                      <Text style={styles.timestampText}>
+                        {new Date(order.date).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={() => handleUpdateStatus(order.id, order.status)}
+                    activeOpacity={0.8}
                   >
-                    {order.status}
-                  </Text>
-                  <ChevronDown
-                    size={14}
-                    color={
-                      order.status === "Pendiente"
-                        ? "#F59E0B"
-                        : order.status === "Entregado"
-                          ? "#10B981"
-                          : order.status === "Cancelado"
-                            ? "#EF4444"
-                            : colors.primary
-                    }
-                  />
-                </TouchableOpacity>
-              </View>
+                    <LinearGradient
+                      colors={getStatusGradient(order.status)}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.statusPill}
+                    >
+                      <StatusIcon status={order.status} />
+                      <Text style={styles.statusPillText}>{order.status}</Text>
+                      <ChevronDown size={14} color="#FFF" />
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
 
-              <View style={styles.divider} />
-
-              <View style={styles.customerSection}>
-                <View style={styles.infoRow}>
-                  <Text style={styles.customerName}>{order.customerName}</Text>
-                  <View style={styles.actionButtons}>
+                {/* Customer Section: Mini Profile */}
+                <View style={styles.customerProfileCard}>
+                  <View
+                    style={[
+                      styles.customerAvatarMiniature,
+                      { backgroundColor: getStatusColor(order.status) + "10" },
+                    ]}
+                  >
+                    <User size={18} color={getStatusColor(order.status)} />
+                  </View>
+                  <View style={styles.customerBaseInfo}>
+                    <Text style={styles.customerBaseName}>
+                      {order.customerName}
+                    </Text>
+                    <View style={styles.customerBaseDetail}>
+                      <MapPin size={12} color="#94A3B8" />
+                      <Text
+                        style={styles.customerBaseAddress}
+                        numberOfLines={1}
+                      >
+                        {order.address}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.quickActions}>
                     {order.customerPhone && (
                       <>
                         <TouchableOpacity
                           onPress={() =>
                             Linking.openURL(`tel:${order.customerPhone}`)
                           }
-                          style={[
-                            styles.smallActionBtn,
-                            { backgroundColor: "#F0F9FF" },
-                          ]}
+                          style={styles.actionCircle}
                         >
-                          <Phone size={14} color="#0EA5E9" />
+                          <Phone size={14} color="#1E293B" />
                         </TouchableOpacity>
                         <TouchableOpacity
                           onPress={() =>
                             Linking.openURL(
-                              `https://wa.me/51${order.customerPhone}?text=Hola%20${order.customerName},%20somos%20de%20la%20tienda...`,
+                              `https://wa.me/51${order.customerPhone}`,
                             )
                           }
                           style={[
-                            styles.smallActionBtn,
-                            { backgroundColor: "#F0FDF4" },
+                            styles.actionCircle,
+                            { backgroundColor: "#DCFCE7" },
                           ]}
                         >
-                          <MessageSquare size={14} color="#22C55E" />
+                          <MessageSquare size={14} color="#166534" />
                         </TouchableOpacity>
                       </>
                     )}
                   </View>
                 </View>
 
-                <View style={styles.detailsRow}>
-                  <View style={styles.detailItem}>
-                    <MapPin size={12} color="#64748B" />
-                    <Text style={styles.detailText} numberOfLines={1}>
-                      {order.address}
-                    </Text>
+                {isExpanded && (
+                  <>
+                    <View style={styles.innerDivider} />
+                    {/* Items Section: Visual List */}
+                    <View style={styles.visualItemsList}>
+                      {order.items.map((item, idx) => (
+                        <View key={idx} style={styles.visualItemRow}>
+                          <View style={styles.productThumbContainer}>
+                            {item.image ? (
+                              <Image
+                                source={{ uri: item.image }}
+                                style={styles.productThumb}
+                              />
+                            ) : (
+                              <View style={styles.productThumbPlaceholder}>
+                                <Package size={20} color="#CBD5E1" />
+                              </View>
+                            )}
+                            <View style={styles.qtyBadge}>
+                              <Text style={styles.qtyBadgeText}>
+                                {item.quantity}
+                              </Text>
+                            </View>
+                          </View>
+                          <View style={styles.productDetails}>
+                            <Text style={styles.productName} numberOfLines={1}>
+                              {item.name}
+                            </Text>
+                            <Text style={styles.productPrice}>
+                              {item.price}
+                            </Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  </>
+                )}
+
+                {/* Card Footer: Summary */}
+                <View style={styles.modernCardFooter}>
+                  <View style={styles.footerLeft}>
+                    <View style={styles.paymentMethodContainer}>
+                      <Text style={styles.paymentMethodValueText}>
+                        {order.paymentMethod.toUpperCase()}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => toggleOrderExpansion(order.id)}
+                      style={styles.expandButton}
+                    >
+                      <Text style={styles.expandButtonText}>
+                        {isExpanded ? "Ver menos" : "Ver detalles"}
+                      </Text>
+                      <ChevronDown
+                        size={16}
+                        color="#64748B"
+                        style={{
+                          transform: [
+                            { rotate: isExpanded ? "180deg" : "0deg" },
+                          ],
+                        }}
+                      />
+                    </TouchableOpacity>
                   </View>
-                  <View style={styles.detailItem}>
-                    <DollarSign size={12} color="#64748B" />
-                    <Text style={styles.detailText}>{order.paymentMethod}</Text>
+                  <View style={styles.finalTotalContainer}>
+                    <Text style={styles.totalLabelSmall}>POR PAGAR</Text>
+                    <Text style={styles.totalValueLarge}>{order.total}</Text>
                   </View>
                 </View>
               </View>
-
-              <View style={styles.itemsSection}>
-                {order.items.map((item, idx) => (
-                  <View key={idx} style={styles.itemRow}>
-                    <Text style={styles.itemQty}>{item.quantity}x</Text>
-                    <Text style={styles.itemName}>{item.name}</Text>
-                    <Text style={styles.itemPrice}>{item.price}</Text>
-                  </View>
-                ))}
-              </View>
-
-              <View style={styles.cardFooter}>
-                <Text style={styles.totalLabel}>TOTAL DEL PEDIDO</Text>
-                <Text style={styles.totalValue}>{order.total}</Text>
-              </View>
-            </View>
-          ))}
+            );
+          })}
 
           {filteredOrders.length === 0 && (
-            <View style={styles.emptyContainer}>
-              <Package size={64} color="#CBD5E1" />
-              <Text style={styles.emptyTitle}>Sin pedidos</Text>
-              <Text style={styles.emptySubtitle}>
-                No se encontraron pedidos con este filtro.
+            <View style={styles.emptyView}>
+              <View style={styles.emptyIconCircle}>
+                <Package size={40} color="#CBD5E1" />
+              </View>
+              <Text style={styles.emptyTitleLarge}>No hay pedidos aquí</Text>
+              <Text style={styles.emptySubtitleLarge}>
+                Prueba cambiando el filtro o la búsqueda
               </Text>
             </View>
           )}
         </ScrollView>
       )}
+      {/* Status Update Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={statusModalVisible}
+        onRequestClose={() => setStatusModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={() => setStatusModalVisible(false)}
+          />
+          <View style={styles.statusModalContent}>
+            <View style={styles.modalHeaderLine} />
+
+            <View style={styles.statusModalHeader}>
+              <Text style={styles.statusModalTitle}>Actualizar Estado</Text>
+              <Text style={styles.statusModalSubtitle}>
+                Pedido #{orderToUpdate?.id.slice(0, 8).toUpperCase()}
+              </Text>
+            </View>
+
+            <View style={styles.statusOptionsGrid}>
+              {STATUS_FLOW.map((status) => {
+                const isActive = orderToUpdate?.currentStatus === status;
+                const color = getStatusColor(status);
+
+                return (
+                  <TouchableOpacity
+                    key={status}
+                    style={[
+                      styles.statusOptionItem,
+                      isActive && {
+                        borderColor: color,
+                        backgroundColor: color + "08",
+                      },
+                    ]}
+                    onPress={() => confirmStatusUpdate(status)}
+                  >
+                    <View
+                      style={[
+                        styles.statusIconCircle,
+                        { backgroundColor: color + "15" },
+                      ]}
+                    >
+                      <StatusIcon status={status} />
+                    </View>
+                    <View style={styles.statusOptionTextContainer}>
+                      <Text
+                        style={[
+                          styles.statusOptionLabel,
+                          isActive && { color },
+                        ]}
+                      >
+                        {status}
+                      </Text>
+                      {isActive && (
+                        <View
+                          style={[
+                            styles.activeStatusIndicator,
+                            { backgroundColor: color },
+                          ]}
+                        >
+                          <Text style={styles.activeStatusText}>ACTUAL</Text>
+                        </View>
+                      )}
+                    </View>
+                    {!isActive && (
+                      <ArrowLeft
+                        size={16}
+                        color="#CBD5E1"
+                        style={{ transform: [{ rotate: "180deg" }] }}
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <TouchableOpacity
+              style={styles.statusModalCloseBtn}
+              onPress={() => setStatusModalVisible(false)}
+            >
+              <Text style={styles.statusModalCloseText}>Cerrar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -265,235 +543,498 @@ export const AdminOrdersScreen = ({ onBack }: AdminOrdersScreenProps) => {
 const styles: any = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F1F5F9", // Brighter, more modern light gray
   },
-  header: {
+  compactHeader: {
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 20, // Increased to give space for the curve
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.04,
+        shadowRadius: 15,
+      },
+      android: { elevation: 6 },
+    }),
+  },
+  compactHeaderTop: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === "ios" ? 60 : 20,
-    paddingBottom: 20,
-    backgroundColor: "#FFFFFF",
+    height: 48,
+    marginBottom: 4,
   },
-  backButton: {
-    width: 44,
-    height: 44,
+  backBtnMini: {
+    width: 36,
+    height: 36,
     justifyContent: "center",
-    alignItems: "center",
   },
-  headerTitle: {
+  compactTitle: {
+    flex: 1,
     fontFamily: "Outfit_700Bold",
     fontSize: 18,
-    color: "#1E293B",
-    letterSpacing: 0.5,
+    color: "#0F172A",
+    marginLeft: 4,
   },
-  filterButton: {
-    width: 44,
-    height: 44,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  tabsContainer: {
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
-  },
-  tabsScroll: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-  },
-  tab: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginRight: 8,
+  badgeMini: {
     backgroundColor: "#F1F5F9",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
   },
-  activeTab: {
+  compactUnderline: {
+    width: 40,
+    height: 4,
     backgroundColor: colors.primary,
+    borderRadius: 2,
+    marginTop: -2,
   },
-  tabText: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 13,
-    color: "#64748B",
+  compactSearchSection: {
+    marginTop: 12, // Space from Title row
   },
-  activeTabText: {
-    color: "#FFFFFF",
-  },
-  loading: {
-    flex: 1,
-    justifyContent: "center",
+  compactSearchBar: {
+    flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    height: 44,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
   },
-  ordersList: {
+  compactSearchInput: {
     flex: 1,
+    fontFamily: "Inter_500Medium",
+    fontSize: 14,
+    color: "#1E293B",
+    marginLeft: 8,
+    padding: 0,
   },
-  ordersContent: {
-    padding: 16,
+  filterSection: {
+    marginTop: 8, // Breathing room from the header curve
+    zIndex: 10,
   },
-  orderCard: {
-    backgroundColor: "#FFFFFF",
+  filterTabsScroll: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  filterTab: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
     borderRadius: 20,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
     ...Platform.select({
       ios: {
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.05,
-        shadowRadius: 12,
+        shadowRadius: 10,
       },
-      android: {
-        elevation: 3,
-      },
+      android: { elevation: 2 },
     }),
   },
-  cardHeader: {
+  activeFilterTab: {
+    borderColor: "transparent",
+  },
+  filterTabText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 13,
+    color: "#64748B",
+  },
+  activeFilterTabText: {
+    color: "#FFFFFF",
+  },
+  contentScroll: {
+    flex: 1,
+  },
+  contentPadding: {
+    padding: 20,
+    paddingTop: 10,
+  },
+  modernOrderCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 32,
+    padding: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#F8FAFC",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 15 },
+        shadowOpacity: 0.08,
+        shadowRadius: 25,
+      },
+      android: { elevation: 4 },
+    }),
+  },
+  modernCardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 12,
+    marginBottom: 20,
   },
-  orderId: {
-    fontFamily: "Outfit_700Bold",
-    fontSize: 16,
-    color: "#1E293B",
-  },
-  orderDate: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 12,
-    color: "#94A3B8",
-    marginTop: 2,
-  },
-  statusBadge: {
+  idContainer: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
     gap: 6,
   },
-  statusPendiente: { backgroundColor: "#FEF3C7" },
-  statusEnCamino: { backgroundColor: colors.primary + "15" },
-  statusEntregado: { backgroundColor: "#DCFCE7" },
-  statusCancelado: { backgroundColor: "#FEE2E2" },
-  statusText: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 11,
-    textTransform: "uppercase",
+  idPrefix: {
+    fontFamily: "Inter_800ExtraBold",
+    fontSize: 10,
+    color: "#94A3B8",
+    letterSpacing: 1,
   },
-  textPendiente: { color: "#F59E0B" },
-  textEnCamino: { color: colors.primary },
-  textEntregado: { color: "#10B981" },
-  textCancelado: { color: "#EF4444" },
-  divider: {
-    height: 1,
-    backgroundColor: "#F1F5F9",
-    marginBottom: 12,
+  idMain: {
+    fontFamily: "Outfit_700Bold",
+    fontSize: 17,
+    color: "#0F172A",
   },
-  customerSection: {
-    marginBottom: 12,
-  },
-  infoRow: {
+  timestampRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
+    gap: 6,
+    marginTop: 4,
   },
-  customerName: {
-    fontFamily: "Outfit_600SemiBold",
-    fontSize: 16,
-    color: "#1E293B",
-    flex: 1,
+  timestampText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 12,
+    color: "#64748B",
   },
-  actionButtons: {
+  statusPill: {
     flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
     gap: 8,
   },
-  smallActionBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+  statusPillText: {
+    fontFamily: "Inter_800ExtraBold",
+    fontSize: 10,
+    color: "#FFFFFF",
+    letterSpacing: 0.5,
+  },
+  customerProfileCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    borderRadius: 20,
+    padding: 14,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+  },
+  customerAvatarMiniature: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
   },
-  detailsRow: {
-    flexDirection: "column",
-    gap: 4,
-    marginBottom: 12,
+  customerBaseInfo: {
+    flex: 1,
+    marginLeft: 14,
   },
-  detailItem: {
+  customerBaseName: {
+    fontFamily: "Outfit_700Bold",
+    fontSize: 16,
+    color: "#0F172A",
+  },
+  customerBaseDetail: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 4,
+    marginTop: 4,
   },
-  detailText: {
-    fontFamily: "Inter_400Regular",
+  customerBaseAddress: {
+    fontFamily: "Inter_500Medium",
     fontSize: 13,
     color: "#64748B",
     flex: 1,
   },
-  itemsSection: {
-    backgroundColor: "#F8FAFC",
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
+  quickActions: {
+    flexDirection: "row",
+    gap: 10,
   },
-  itemRow: {
+  actionCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+      },
+      android: { elevation: 2 },
+    }),
+  },
+  innerDivider: {
+    height: 1,
+    backgroundColor: "#F1F5F9",
+    marginBottom: 20,
+    marginHorizontal: 4,
+  },
+  visualItemsList: {
+    gap: 12,
+    marginBottom: 20,
+    paddingHorizontal: 4,
+  },
+  visualItemRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 8,
   },
-  itemQty: {
-    width: 30,
-    fontFamily: "Outfit_700Bold",
-    fontSize: 13,
-    color: colors.primary,
+  productThumbContainer: {
+    position: "relative",
   },
-  itemName: {
+  productThumb: {
+    width: 60,
+    height: 60,
+    borderRadius: 14,
+    backgroundColor: "#F8FAFC",
+  },
+  productThumbPlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 14,
+    backgroundColor: "#F1F5F9",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  qtyBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    backgroundColor: "#0F172A",
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+    zIndex: 10,
+  },
+  qtyBadgeText: {
+    fontFamily: "Inter_800ExtraBold",
+    fontSize: 10,
+    color: "#FFFFFF",
+  },
+  productDetails: {
     flex: 1,
-    fontFamily: "Inter_500Medium",
-    fontSize: 13,
-    color: "#334155",
+    marginLeft: 16,
   },
-  itemPrice: {
+  productName: {
+    fontFamily: "Outfit_600SemiBold",
+    fontSize: 15,
+    color: "#1E293B",
+  },
+  productPrice: {
     fontFamily: "Inter_600SemiBold",
     fontSize: 13,
-    color: "#334155",
+    color: "#64748B",
+    marginTop: 2,
   },
-  cardFooter: {
+  modernCardFooter: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-end",
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
     marginTop: 4,
   },
-  totalLabel: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 11,
-    color: "#94A3B8",
-    letterSpacing: 1,
+  footerLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
-  totalValue: {
+  expandButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  expandButtonText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 12,
+    color: "#64748B",
+  },
+  paymentMethodContainer: {
+    gap: 2,
+  },
+  paymentMethodLabelText: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 9,
+    color: "#94A3B8",
+    letterSpacing: 0.5,
+  },
+  paymentMethodValueText: {
+    fontFamily: "Outfit_700Bold",
+    fontSize: 12,
+    color: "#94A3B8",
+  },
+  finalTotalContainer: {
+    alignItems: "flex-end",
+    gap: 0,
+  },
+  totalLabelSmall: {
+    fontFamily: "Inter_800ExtraBold",
+    fontSize: 9,
+    color: "#94A3B8",
+    letterSpacing: 0.5,
+  },
+  totalValueLarge: {
     fontFamily: "Outfit_800ExtraBold",
-    fontSize: 20,
+    fontSize: 24,
     color: colors.primary,
   },
-  emptyContainer: {
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
     alignItems: "center",
-    marginTop: 100,
+    gap: 16,
   },
-  emptyTitle: {
+  loadingText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 14,
+    color: "#64748B",
+  },
+  emptyView: {
+    alignItems: "center",
+    marginTop: 80,
+  },
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  emptyTitleLarge: {
     fontFamily: "Outfit_700Bold",
-    fontSize: 18,
-    color: "#1E293B",
-    marginTop: 16,
+    fontSize: 20,
+    color: "#0F172A",
   },
-  emptySubtitle: {
-    fontFamily: "Inter_400Regular",
+  emptySubtitleLarge: {
+    fontFamily: "Inter_500Medium",
     fontSize: 14,
     color: "#64748B",
     marginTop: 8,
     textAlign: "center",
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(15, 23, 42, 0.6)",
+  },
+  statusModalContent: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    padding: 24,
+    paddingBottom: Platform.OS === "ios" ? 40 : 24,
+  },
+  modalHeaderLine: {
+    width: 40,
+    height: 4,
+    backgroundColor: "#E2E8F0",
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 20,
+  },
+  statusModalHeader: {
+    marginBottom: 24,
+  },
+  statusModalTitle: {
+    fontFamily: "Outfit_800ExtraBold",
+    fontSize: 22,
+    color: "#0F172A",
+    marginBottom: 4,
+  },
+  statusModalSubtitle: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 14,
+    color: "#64748B",
+  },
+  statusOptionsGrid: {
+    gap: 12,
+    marginBottom: 24,
+  },
+  statusOptionItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+  },
+  statusIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 16,
+  },
+  statusOptionTextContainer: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  statusOptionLabel: {
+    fontFamily: "Outfit_700Bold",
+    fontSize: 16,
+    color: "#1E293B",
+  },
+  activeStatusIndicator: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  activeStatusText: {
+    fontFamily: "Inter_800ExtraBold",
+    fontSize: 9,
+    color: "#FFFFFF",
+  },
+  statusModalCloseBtn: {
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: "#F1F5F9",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  statusModalCloseText: {
+    fontFamily: "Outfit_700Bold",
+    fontSize: 16,
+    color: "#475569",
   },
 });

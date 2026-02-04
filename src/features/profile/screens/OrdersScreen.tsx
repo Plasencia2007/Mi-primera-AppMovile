@@ -9,6 +9,8 @@ import {
   Image,
   Dimensions,
   Alert,
+  Modal,
+  Pressable,
 } from "react-native";
 import {
   ChevronLeft,
@@ -24,6 +26,7 @@ import {
   Receipt,
   Map,
   Compass,
+  AlertCircle,
 } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors, spacing } from "../../../theme";
@@ -47,17 +50,30 @@ export const OrdersScreen = ({
   onReorder,
   initialFilter = "all",
 }: OrdersScreenProps) => {
-  const { orders, fetchOrders, isLoading, cancelOrder } = useOrders();
+  const { orders, fetchOrders, subscribeToOrders, isLoading, cancelOrder } =
+    useOrders();
   const addItem = useCart((state) => state.addItem);
   const [selectedTab, setSelectedTab] = useState<"Activos" | "Historial">(
     initialFilter === "En camino" || initialFilter === "all"
       ? "Activos"
       : "Historial",
   );
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
+  const [orderToCancel, setOrderToCancel] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState<string | null>(null);
+
+  const CANCEL_REASONS = [
+    "Pedido por error",
+    "Tarda demasiado",
+    "Cambio de planes",
+    "Otro motivo",
+  ];
   const showNotification = useNotification((state) => state.showNotification);
 
   React.useEffect(() => {
     fetchOrders();
+    const unsubscribe = subscribeToOrders();
+    return () => unsubscribe();
   }, []);
 
   const filteredOrders = orders.filter((order) => {
@@ -146,46 +162,31 @@ export const OrdersScreen = ({
     onReorder();
   };
 
-  const handleCancel = (orderId: string, orderDate: string) => {
-    // Check if within 5 minutes (300,000 ms)
-    const diff = new Date().getTime() - new Date(orderDate).getTime();
-    const canCancel = diff < 300000;
+  const handleCancel = (orderId: string) => {
+    setOrderToCancel(orderId);
+    setCancelReason(null);
+    setCancelModalVisible(true);
+  };
 
-    if (!canCancel) {
-      Alert.alert(
-        "No se puede cancelar",
-        "El tiempo límite de 5 minutos para cancelar este pedido ha expirado. Por favor, contacta a soporte si tienes algún inconveniente.",
-      );
-      return;
+  const confirmCancel = async () => {
+    if (!orderToCancel) return;
+
+    const result = await cancelOrder(orderToCancel);
+    if (result.success) {
+      showNotification({
+        type: "success",
+        title: "Pedido Cancelado",
+        message: "Tu pedido ha sido cancelado correctamente.",
+      });
+    } else {
+      showNotification({
+        type: "error",
+        title: "Error",
+        message: "No se pudo cancelar el pedido: " + result.error,
+      });
     }
-
-    Alert.alert(
-      "Cancelar Pedido",
-      "¿Estás seguro de que deseas cancelar este pedido?",
-      [
-        { text: "No, mantener", style: "cancel" },
-        {
-          text: "Sí, cancelar",
-          style: "destructive",
-          onPress: async () => {
-            const result = await cancelOrder(orderId);
-            if (result.success) {
-              showNotification({
-                type: "success",
-                title: "Pedido Cancelado",
-                message: "Tu pedido ha sido cancelado correctamente.",
-              });
-            } else {
-              showNotification({
-                type: "error",
-                title: "Error",
-                message: "No se pudo cancelar el pedido: " + result.error,
-              });
-            }
-          },
-        },
-      ],
-    );
+    setCancelModalVisible(false);
+    setOrderToCancel(null);
   };
 
   return (
@@ -349,22 +350,18 @@ export const OrdersScreen = ({
                         </View>
 
                         <View style={{ flexDirection: "row", gap: 10 }}>
-                          {order.status === "Pendiente" &&
-                            new Date().getTime() -
-                              new Date(order.date).getTime() <
-                              300000 && (
-                              <TouchableOpacity
-                                style={styles.cancelButton}
-                                onPress={() =>
-                                  handleCancel(order.id, order.date)
-                                }
-                              >
-                                <XCircle size={16} color="#EF4444" />
-                                <Text style={styles.cancelButtonText}>
-                                  Cancelar
-                                </Text>
-                              </TouchableOpacity>
-                            )}
+                          {(order.status === "Pendiente" ||
+                            order.status === "Preparando") && (
+                            <TouchableOpacity
+                              style={styles.cancelButton}
+                              onPress={() => handleCancel(order.id)}
+                            >
+                              <XCircle size={16} color="#EF4444" />
+                              <Text style={styles.cancelButtonText}>
+                                Cancelar
+                              </Text>
+                            </TouchableOpacity>
+                          )}
                           <TouchableOpacity
                             style={styles.trackButton}
                             onPress={() => onTrackOrder(order)}
@@ -435,6 +432,82 @@ export const OrdersScreen = ({
         )}
         <View style={{ height: 100 }} />
       </ScrollView>
+      {/* Cancellation Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={cancelModalVisible}
+        onRequestClose={() => setCancelModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={() => setCancelModalVisible(false)}
+          />
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={styles.alertIconBg}>
+                <AlertCircle size={32} color="#EF4444" />
+              </View>
+              <Text style={styles.modalTitle}>¿Cancelar pedido?</Text>
+              <Text style={styles.modalSubtitle}>
+                Cuéntanos por qué deseas cancelar para seguir mejorando.
+              </Text>
+            </View>
+
+            <View style={styles.reasonsContainer}>
+              {CANCEL_REASONS.map((reason) => (
+                <TouchableOpacity
+                  key={reason}
+                  style={[
+                    styles.reasonItem,
+                    cancelReason === reason && styles.reasonItemSelected,
+                  ]}
+                  onPress={() => setCancelReason(reason)}
+                >
+                  <View
+                    style={[
+                      styles.reasonRadio,
+                      cancelReason === reason && styles.reasonRadioSelected,
+                    ]}
+                  >
+                    {cancelReason === reason && (
+                      <View style={styles.reasonRadioInner} />
+                    )}
+                  </View>
+                  <Text
+                    style={[
+                      styles.reasonText,
+                      cancelReason === reason && styles.reasonTextSelected,
+                    ]}
+                  >
+                    {reason}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.keepBtn}
+                onPress={() => setCancelModalVisible(false)}
+              >
+                <Text style={styles.keepBtnText}>No, volver</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.confirmCancelBtn,
+                  !cancelReason && styles.confirmCancelBtnDisabled,
+                ]}
+                disabled={!cancelReason}
+                onPress={confirmCancel}
+              >
+                <Text style={styles.confirmCancelBtnText}>Sí, cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -802,6 +875,135 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   browseBtnText: {
+    fontFamily: "Outfit_700Bold",
+    fontSize: 16,
+    color: "#FFFFFF",
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(15, 23, 42, 0.7)",
+  },
+  modalContent: {
+    width: "100%",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 32,
+    padding: 24,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 20 },
+        shadowOpacity: 0.15,
+        shadowRadius: 30,
+      },
+      android: { elevation: 12 },
+    }),
+  },
+  modalHeader: {
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  alertIconBg: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#FEE2E2",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontFamily: "Outfit_800ExtraBold",
+    fontSize: 24,
+    color: "#0F172A",
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 15,
+    color: "#64748B",
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  reasonsContainer: {
+    marginBottom: 24,
+    gap: 12,
+  },
+  reasonItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+    gap: 12,
+  },
+  reasonItemSelected: {
+    backgroundColor: "#FEE2E2",
+    borderColor: "#FECACA",
+  },
+  reasonRadio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: "#CBD5E1",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  reasonRadioSelected: {
+    borderColor: "#EF4444",
+  },
+  reasonRadioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#EF4444",
+  },
+  reasonText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 15,
+    color: "#475569",
+  },
+  reasonTextSelected: {
+    color: "#991B1B",
+  },
+  modalFooter: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  keepBtn: {
+    flex: 1,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: "#F1F5F9",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  keepBtnText: {
+    fontFamily: "Outfit_700Bold",
+    fontSize: 16,
+    color: "#475569",
+  },
+  confirmCancelBtn: {
+    flex: 2,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: "#EF4444",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  confirmCancelBtnDisabled: {
+    backgroundColor: "#FECACA",
+    opacity: 0.7,
+  },
+  confirmCancelBtnText: {
     fontFamily: "Outfit_700Bold",
     fontSize: 16,
     color: "#FFFFFF",
