@@ -17,7 +17,6 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 
-import { USER_MOCKS } from "../../../data/mocks/user.mocks";
 import { LinearGradient } from "expo-linear-gradient";
 import { supabase } from "../../../services/supabase";
 import { useNotification } from "../../../store/useNotification";

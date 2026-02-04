@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { USER_MOCKS } from '../../../data/mocks/user.mocks';
 import { UserState, UserProfile } from '../../../types/user.types';
 
 export const useUser = create<UserState>((set, get) => ({

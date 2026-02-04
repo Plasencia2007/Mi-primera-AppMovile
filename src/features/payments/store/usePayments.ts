@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import { OTHER_METHODS_MOCKS } from '../../../data/mocks/payment.mocks';
 import { PaymentMethod, PaymentMethodType } from '../../../types/payment.types';
 import { supabase } from '../../../services/supabase';
+import { Platform } from 'react-native';
 
 interface PaymentsState {
   methods: PaymentMethod[];
@@ -9,6 +9,7 @@ interface PaymentsState {
   selectedMethodId: string | null;
   isLoading: boolean;
   fetchMethods: () => Promise<void>;
+  fetchPaymentOptions: () => Promise<void>; // Nueva función
   addMethod: (method: Omit<PaymentMethod, 'id'>) => Promise<void>;
   updateMethod: (id: string, updates: Partial<PaymentMethod>) => Promise<void>;
   removeMethod: (id: string) => Promise<void>;
@@ -18,9 +19,24 @@ interface PaymentsState {
 
 export const usePayments = create<PaymentsState>((set, get) => ({
   methods: [],
-  otherMethods: OTHER_METHODS_MOCKS,
+  otherMethods: [], // Ahora empieza vacío
   selectedMethodId: null,
   isLoading: false,
+
+  fetchPaymentOptions: async () => {
+    try {
+      const { data, error } = await supabase
+        .from('payment_options')
+        .select('*')
+        .eq('is_active', true)
+        .or(`platform.eq.all,platform.eq.${Platform.OS}`);
+
+      if (error) throw error;
+      set({ otherMethods: data || [] });
+    } catch (error) {
+      console.error('Error fetching system payment options:', error);
+    }
+  },
 
   fetchMethods: async () => {
     try {
