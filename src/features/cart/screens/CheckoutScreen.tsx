@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   Platform,
-  SafeAreaView,
 } from "react-native";
 import {
   ChevronLeft,
