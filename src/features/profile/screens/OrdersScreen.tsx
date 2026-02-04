@@ -1,187 +1,439 @@
-import React, { useState } from 'react';
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  ScrollView, 
-  TouchableOpacity, 
+import React, { useState } from "react";
+import {
+  StyleSheet,
+  Text,
+  View,
+  ScrollView,
+  TouchableOpacity,
   Platform,
-  Image 
-} from 'react-native';
-import { ChevronLeft, Package, MapPin, CheckCircle2, Clock, XCircle, Truck } from 'lucide-react-native';
-import { colors, spacing } from '../../../theme';
-import { USER_MOCKS } from '../../../data/mocks/user.mocks';
-import { Order, OrderStatus, OrderItem } from '../../../types/order.types';
+  Image,
+  Dimensions,
+  Alert,
+} from "react-native";
+import {
+  ChevronLeft,
+  Package,
+  MapPin,
+  CheckCircle2,
+  Clock,
+  XCircle,
+  Truck,
+  ArrowRight,
+  RefreshCw,
+  Search,
+  Receipt,
+  Map,
+  Compass,
+} from "lucide-react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { colors, spacing } from "../../../theme";
+import { useOrders } from "../../orders/store/useOrders";
+import { Order, OrderStatus, OrderItem } from "../../../types/order.types";
+import { useNotification } from "../../../store/useNotification";
+import { useCart } from "../../cart/store/useCart";
+
+const { width } = Dimensions.get("window");
 
 interface OrdersScreenProps {
   onBack: () => void;
-  initialFilter?: 'all' | OrderStatus;
+  onTrackOrder: (order: Order) => void;
+  onReorder: () => void;
+  initialFilter?: "all" | OrderStatus;
 }
 
-export const OrdersScreen = ({ onBack, initialFilter = 'all' }: OrdersScreenProps) => {
-  const [activeFilter, setActiveFilter] = useState<'all' | OrderStatus>(initialFilter);
-  const orders = USER_MOCKS.orders;
+export const OrdersScreen = ({
+  onBack,
+  onTrackOrder,
+  onReorder,
+  initialFilter = "all",
+}: OrdersScreenProps) => {
+  const { orders, fetchOrders, isLoading, cancelOrder } = useOrders();
+  const addItem = useCart((state) => state.addItem);
+  const [selectedTab, setSelectedTab] = useState<"Activos" | "Historial">(
+    initialFilter === "En camino" || initialFilter === "all"
+      ? "Activos"
+      : "Historial",
+  );
+  const showNotification = useNotification((state) => state.showNotification);
 
-  const filteredOrders = activeFilter === 'all' 
-    ? orders 
-    : orders.filter(order => order.status === activeFilter);
+  React.useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  const filteredOrders = orders.filter((order) => {
+    if (selectedTab === "Activos") {
+      return order.status === "Pendiente" || order.status === "En camino";
+    }
+    return order.status === "Entregado" || order.status === "Cancelado";
+  });
 
   const getStatusIcon = (status: OrderStatus) => {
     switch (status) {
-      case 'Entregado':
-        return <CheckCircle2 size={20} color="#10B981" />;
-      case 'En camino':
-        return <Truck size={20} color={colors.primary} />;
-      case 'Cancelado':
-        return <XCircle size={20} color="#EF4444" />;
+      case "Entregado":
+        return <CheckCircle2 size={16} color="#10B981" />;
+      case "En camino":
+        return <Truck size={16} color={colors.primary} />;
+      case "Cancelado":
+        return <XCircle size={16} color="#EF4444" />;
       default:
-        return <Clock size={20} color="#F59E0B" />;
+        return <Clock size={16} color="#F59E0B" />;
     }
   };
 
-  const getStatusColor = (status: OrderStatus) => {
+  const getStatusStyles = (status: OrderStatus) => {
     switch (status) {
-      case 'Entregado':
-        return '#10B981';
-      case 'En camino':
-        return colors.primary;
-      case 'Cancelado':
-        return '#EF4444';
+      case "Entregado":
+        return { color: "#10B981", bg: "#DCFCE7", label: "Entregado" };
+      case "En camino":
+        return {
+          color: colors.primary,
+          bg: colors.primary + "15",
+          label: "En camino",
+        };
+      case "Cancelado":
+        return { color: "#EF4444", bg: "#FEE2E2", label: "Cancelado" };
       default:
-        return '#F59E0B';
+        return { color: "#F59E0B", bg: "#FEF3C7", label: "Preparando" };
     }
   };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    const months = [
+      "Ene",
+      "Feb",
+      "Mar",
+      "Abr",
+      "May",
+      "Jun",
+      "Jul",
+      "Ago",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dic",
+    ];
     return `${date.getDate()} ${months[date.getMonth()]}, ${date.getFullYear()}`;
   };
 
-  const filters: Array<{ id: 'all' | OrderStatus; label: string }> = [
-    { id: 'all', label: 'Todos' },
-    { id: 'En camino', label: 'En Camino' },
-    { id: 'Entregado', label: 'Entregados' },
-    { id: 'Cancelado', label: 'Cancelados' },
+  const filters: Array<{ id: "all" | OrderStatus; label: string }> = [
+    { id: "all", label: "Todos" },
+    { id: "En camino", label: "Activos" },
+    { id: "Entregado", label: "Historial" },
+    { id: "Cancelado", label: "Cancelados" },
   ];
+
+  const handleReorder = (order: Order) => {
+    order.items.forEach((item) => {
+      const product = {
+        id:
+          item.productId ||
+          `manual-${item.name.toLowerCase().replace(/\s+/g, "-")}`,
+        name: item.name,
+        price: item.price,
+        image:
+          "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=200&auto=format&fit=crop",
+      };
+      addItem(product, item.quantity, []);
+    });
+
+    showNotification({
+      type: "success",
+      title: "Copia del pedido lista",
+      message: "Se han añadido los productos al carrito.",
+    });
+
+    onReorder();
+  };
+
+  const handleCancel = (orderId: string, orderDate: string) => {
+    // Check if within 5 minutes (300,000 ms)
+    const diff = new Date().getTime() - new Date(orderDate).getTime();
+    const canCancel = diff < 300000;
+
+    if (!canCancel) {
+      Alert.alert(
+        "No se puede cancelar",
+        "El tiempo límite de 5 minutos para cancelar este pedido ha expirado. Por favor, contacta a soporte si tienes algún inconveniente.",
+      );
+      return;
+    }
+
+    Alert.alert(
+      "Cancelar Pedido",
+      "¿Estás seguro de que deseas cancelar este pedido?",
+      [
+        { text: "No, mantener", style: "cancel" },
+        {
+          text: "Sí, cancelar",
+          style: "destructive",
+          onPress: async () => {
+            const result = await cancelOrder(orderId);
+            if (result.success) {
+              showNotification({
+                type: "success",
+                title: "Pedido Cancelado",
+                message: "Tu pedido ha sido cancelado correctamente.",
+              });
+            } else {
+              showNotification({
+                type: "error",
+                title: "Error",
+                message: "No se pudo cancelar el pedido: " + result.error,
+              });
+            }
+          },
+        },
+      ],
+    );
+  };
 
   return (
     <View style={styles.container}>
-      {/* Header */}
+      {/* TopAppBar */}
       <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <ChevronLeft size={28} color={colors.primary} strokeWidth={3} />
+        <View style={styles.titleContainer}>
+          <Text style={styles.headerTitle}>Mis Pedidos</Text>
+          <View style={styles.titleUnderline} />
+        </View>
+        <TouchableOpacity
+          style={styles.refreshButton}
+          onPress={() => fetchOrders()}
+        >
+          <RefreshCw size={22} color="#181311" />
+        </TouchableOpacity>
+      </View>
+
+      {/* SegmentedButtons */}
+      <View style={styles.segmentedWrapper}>
+        <View style={styles.segmentedBg}>
+          <TouchableOpacity
+            style={[
+              styles.segmentedButton,
+              selectedTab === "Activos" && styles.segmentedButtonActive,
+            ]}
+            onPress={() => setSelectedTab("Activos")}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[
+                styles.segmentedText,
+                selectedTab === "Activos" && styles.segmentedTextActive,
+              ]}
+            >
+              Activos
+            </Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>MIS PEDIDOS</Text>
-          <View style={{ width: 40 }} />
+          <TouchableOpacity
+            style={[
+              styles.segmentedButton,
+              selectedTab === "Historial" && styles.segmentedButtonActive,
+            ]}
+            onPress={() => setSelectedTab("Historial")}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[
+                styles.segmentedText,
+                selectedTab === "Historial" && styles.segmentedTextActive,
+              ]}
+            >
+              Historial
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* Tab Filters */}
-      <View style={styles.tabsContainer}>
-        {filters.map((filter) => (
-          <TouchableOpacity
-            key={filter.id}
-            style={styles.tab}
-            onPress={() => setActiveFilter(filter.id)}
-            activeOpacity={0.7}
-          >
-            <Text style={[
-              styles.tabText,
-              activeFilter === filter.id && styles.tabTextActive
-            ]}>
-              {filter.label}
-            </Text>
-            {activeFilter === filter.id && (
-              <View style={styles.tabIndicator} />
-            )}
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <ScrollView 
+      <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
         {filteredOrders.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Package size={80} color="#E9ECEF" strokeWidth={1.5} />
-            <Text style={styles.emptyTitle}>No hay pedidos</Text>
+            <View style={styles.emptyIconCircle}>
+              <Package size={64} color="#CBD5E1" strokeWidth={1.5} />
+            </View>
+            <Text style={styles.emptyTitle}>Sin pedidos aún</Text>
             <Text style={styles.emptySubtitle}>
-              {activeFilter === 'all' 
-                ? 'Aún no has realizado ningún pedido' 
-                : `No tienes pedidos ${activeFilter.toLowerCase()}`}
+              {selectedTab === "Activos"
+                ? "No tienes pedidos en curso ahora mismo. ¡Explora el menú!"
+                : "Tu historial de pedidos aparecerá aquí."}
             </Text>
+            <TouchableOpacity style={styles.browseBtn} onPress={onBack}>
+              <Text style={styles.browseBtnText}>Ver el Menú</Text>
+            </TouchableOpacity>
           </View>
         ) : (
-          (filteredOrders as Order[]).map((order: Order) => (
-            <View key={order.id} style={styles.orderCard}>
-              {/* Order Header */}
-              <View style={styles.orderHeader}>
-                <View style={styles.orderHeaderLeft}>
-                  <View style={[
-                    styles.statusIconWrapper,
-                    { backgroundColor: getStatusColor(order.status) + '15' }
-                  ]}>
-                    {getStatusIcon(order.status)}
-                  </View>
-                  <View>
-                    <Text style={styles.orderId}>{order.id}</Text>
-                    <Text style={styles.orderDate}>{formatDate(order.date)}</Text>
-                  </View>
+          <>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>
+                {selectedTab === "Activos"
+                  ? "Pedidos en curso"
+                  : "Pedidos recientes"}
+              </Text>
+              {selectedTab === "Activos" && (
+                <View style={styles.activeCounter}>
+                  <Text style={styles.activeCounterText}>
+                    {filteredOrders.length} ACTIVO
+                  </Text>
                 </View>
-                <View style={[
-                  styles.statusBadge,
-                  { backgroundColor: getStatusColor(order.status) }
-                ]}>
-                  <Text style={styles.statusText}>{order.status.toUpperCase()}</Text>
-                </View>
-              </View>
-
-              {/* Order Items */}
-              <View style={styles.itemsContainer}>
-                {order.items.map((item: OrderItem, index: number) => (
-                  <View key={index} style={styles.itemRow}>
-                    <View style={styles.itemQuantityBadge}>
-                      <Text style={styles.itemQuantityText}>{item.quantity}</Text>
-                    </View>
-                    <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-                    <Text style={styles.itemPrice}>{item.price}</Text>
-                  </View>
-                ))}
-              </View>
-
-              {/* Order Footer */}
-              <View style={styles.orderFooter}>
-                <View style={styles.totalContainer}>
-                  <Text style={styles.totalLabel}>Total del pedido</Text>
-                  <Text style={styles.totalAmount}>{order.total}</Text>
-                </View>
-
-                <View style={styles.actionButtons}>
-                  <TouchableOpacity 
-                    style={styles.trackButton}
-                    activeOpacity={0.8}
-                  >
-                    <MapPin size={18} color={colors.text} />
-                    <Text style={styles.trackButtonText}>Rastrear</Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={styles.reorderButton}
-                    activeOpacity={0.8}
-                  >
-                    <Package size={18} color={colors.white} />
-                    <Text style={styles.reorderButtonText}>Pedir de Nuevo</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
+              )}
             </View>
-          ))
-        )}
 
-        <View style={{ height: 40 }} />
+            {(filteredOrders as Order[]).map((order: Order) => {
+              const status = getStatusStyles(order.status);
+
+              if (selectedTab === "Activos") {
+                return (
+                  <TouchableOpacity
+                    key={order.id}
+                    style={styles.activeOrderCard}
+                    activeOpacity={0.9}
+                    onPress={() => onTrackOrder(order)}
+                  >
+                    <View style={styles.activeCardImageContainer}>
+                      <Image
+                        source={{
+                          uri:
+                            typeof order.image === "string" &&
+                            order.image.startsWith("http")
+                              ? order.image
+                              : "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400&auto=format&fit=crop",
+                        }}
+                        style={styles.activeCardImage}
+                        resizeMode="cover"
+                      />
+                      <LinearGradient
+                        colors={["transparent", "rgba(0,0,0,0.7)"]}
+                        style={styles.activeCardOverlay}
+                      />
+                      <View style={styles.activeStatusRow}>
+                        <View style={styles.activeBadgeContainer}>
+                          <View style={styles.activeBadgeIcon}>
+                            <Truck size={12} color="white" />
+                          </View>
+                          <Text style={styles.activeBadgeText}>
+                            {status.label.toUpperCase()}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    <View style={styles.activeCardBody}>
+                      <View style={styles.activeCardMainRow}>
+                        <View>
+                          <Text style={styles.activeCardStoreName}>
+                            Don Brassa - San Isidro
+                          </Text>
+                          <Text style={styles.activeCardOrderId}>
+                            Pedido #{order.id.replace("ORD-", "")}
+                          </Text>
+                        </View>
+                        <Text style={styles.activeCardPrice}>
+                          {order.total}
+                        </Text>
+                      </View>
+
+                      <Text style={styles.activeCardSummary} numberOfLines={2}>
+                        {order.items.map((i) => i.name).join(", ")}
+                      </Text>
+
+                      <View style={styles.activeCardFooter}>
+                        <View style={styles.activeTimeRow}>
+                          <Clock size={16} color="#94A3B8" />
+                          <Text style={styles.activeTimeText}>
+                            {order.status === "Pendiente"
+                              ? "Preparando..."
+                              : "Llega en 15-20 min"}
+                          </Text>
+                        </View>
+
+                        <View style={{ flexDirection: "row", gap: 10 }}>
+                          {order.status === "Pendiente" &&
+                            new Date().getTime() -
+                              new Date(order.date).getTime() <
+                              300000 && (
+                              <TouchableOpacity
+                                style={styles.cancelButton}
+                                onPress={() =>
+                                  handleCancel(order.id, order.date)
+                                }
+                              >
+                                <XCircle size={16} color="#EF4444" />
+                                <Text style={styles.cancelButtonText}>
+                                  Cancelar
+                                </Text>
+                              </TouchableOpacity>
+                            )}
+                          <TouchableOpacity
+                            style={styles.trackButton}
+                            onPress={() => onTrackOrder(order)}
+                          >
+                            <Compass size={16} color="white" />
+                            <Text style={styles.trackButtonText}>Rastrear</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              }
+
+              // Past Order Card Layout
+              return (
+                <View key={order.id} style={styles.pastOrderCard}>
+                  <Image
+                    source={{
+                      uri:
+                        typeof order.image === "string" &&
+                        order.image.startsWith("http")
+                          ? order.image
+                          : "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=200&auto=format&fit=crop",
+                    }}
+                    style={styles.pastCardImage}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.pastCardContent}>
+                    <View style={styles.pastCardHeader}>
+                      <Text style={styles.pastCardStore}>Don Brassa</Text>
+                      <Text style={styles.pastCardDate}>
+                        {formatDate(order.date)}
+                      </Text>
+                    </View>
+                    <Text style={styles.pastCardSummary} numberOfLines={1}>
+                      {order.items.map((i) => i.name).join(", ")}
+                    </Text>
+                    <View style={styles.pastCardFooter}>
+                      <Text style={styles.pastCardPrice}>{order.total}</Text>
+                      <View style={styles.pastStatusLine}>
+                        <CheckCircle2
+                          size={14}
+                          color={
+                            order.status === "Cancelado" ? "#EF4444" : "#22C55E"
+                          }
+                        />
+                        <Text
+                          style={[
+                            styles.pastStatusLabel,
+                            {
+                              color:
+                                order.status === "Cancelado"
+                                  ? "#EF4444"
+                                  : "#22C55E",
+                            },
+                          ]}
+                        >
+                          {status.label.toUpperCase()}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
+          </>
+        )}
+        <View style={{ height: 100 }} />
       </ScrollView>
     </View>
   );
@@ -190,211 +442,222 @@ export const OrdersScreen = ({ onBack, initialFilter = 'all' }: OrdersScreenProp
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F6F6',
+    backgroundColor: "#F8F6F6",
   },
   header: {
-    backgroundColor: 'rgba(248, 246, 246, 0.8)',
-    paddingTop: Platform.OS === 'ios' ? 10 : 5,
-    zIndex: 20,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 16,
+    paddingTop: Platform.OS === "ios" ? 20 : 10,
     paddingBottom: 5,
+    backgroundColor: "#F8F6F6",
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+  titleContainer: {
+    flex: 1,
+    position: "relative",
   },
   headerTitle: {
-    fontFamily: 'Outfit_700Bold',
-    fontSize: 18,
-    color: '#181111',
+    fontFamily: "Outfit_800ExtraBold",
+    fontSize: 32,
+    color: "#181311",
+    textAlign: "left",
     letterSpacing: -0.5,
   },
-  tabsContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F3F5',
-    paddingHorizontal: 16,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 14,
-    alignItems: 'center',
-    position: 'relative',
-  },
-  tabText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-    color: '#896163',
-  },
-  tabTextActive: {
-    color: colors.primary,
-    fontFamily: 'Outfit_700Bold',
-  },
-  tabIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 3,
+  titleUnderline: {
+    width: 40,
+    height: 4,
     backgroundColor: colors.primary,
-    borderTopLeftRadius: 3,
-    borderTopRightRadius: 3,
+    borderRadius: 2,
+    marginTop: -2,
+    marginLeft: 2,
   },
-  scrollContent: {
-    padding: 16,
+  refreshButton: {
+    width: 48,
+    height: 48,
+    justifyContent: "center",
+    alignItems: "flex-end",
   },
-  orderCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    marginBottom: 16,
-    overflow: 'hidden',
+  segmentedWrapper: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  segmentedBg: {
+    flexDirection: "row",
+    backgroundColor: "#E2E8F0",
+    borderRadius: 12,
+    padding: 4,
+  },
+  segmentedButton: {
+    flex: 1,
+    height: 40,
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 8,
+  },
+  segmentedButtonActive: {
+    backgroundColor: "#FFFFFF",
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
       },
       android: {
-        elevation: 4,
+        elevation: 2,
       },
     }),
   },
-  orderHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F3F5',
+  segmentedText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 14,
+    color: "#64748B",
   },
-  orderHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  segmentedTextActive: {
+    color: colors.primary,
   },
-  statusIconWrapper: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
+  scrollContent: {
+    paddingBottom: 40,
   },
-  orderId: {
-    fontFamily: 'Outfit_700Bold',
-    fontSize: 16,
-    color: '#181111',
-    letterSpacing: -0.3,
+  sectionHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
   },
-  orderDate: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    color: '#896163',
-    marginTop: 2,
+  sectionTitle: {
+    fontFamily: "Outfit_800ExtraBold",
+    fontSize: 18,
+    color: "#181311",
   },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
+  activeCounter: {
+    backgroundColor: colors.primary + "15",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 99,
   },
-  statusText: {
-    fontFamily: 'Outfit_800ExtraBold',
+  activeCounterText: {
+    fontFamily: "Inter_800ExtraBold",
     fontSize: 10,
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  itemsContainer: {
-    padding: 16,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  itemQuantityBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.primary + '15',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  itemQuantityText: {
-    fontFamily: 'Outfit_700Bold',
-    fontSize: 13,
     color: colors.primary,
+    letterSpacing: 1,
   },
-  itemName: {
-    flex: 1,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 14,
-    color: '#181111',
+  activeOrderCard: {
+    backgroundColor: "#FFFFFF",
+    marginHorizontal: 16,
+    borderRadius: 20,
+    overflow: "hidden",
+    marginBottom: 24,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
   },
-  itemPrice: {
-    fontFamily: 'Outfit_600SemiBold',
-    fontSize: 14,
-    color: '#896163',
+  activeCardImageContainer: {
+    width: "100%",
+    height: 160,
+    position: "relative",
   },
-  orderFooter: {
-    padding: 16,
-    backgroundColor: '#F8F9FA',
+  activeCardImage: {
+    width: "100%",
+    height: "100%",
   },
-  totalContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
+  activeCardOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 80,
   },
-  totalLabel: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-    color: '#896163',
+  activeStatusRow: {
+    position: "absolute",
+    bottom: 12,
+    left: 16,
   },
-  totalAmount: {
-    fontFamily: 'Outfit_700Bold',
-    fontSize: 22,
-    color: colors.primary,
-    letterSpacing: -0.5,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  trackButton: {
-    flex: 1,
-    flexDirection: 'row',
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E6DBDC',
-    justifyContent: 'center',
-    alignItems: 'center',
+  activeBadgeContainer: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
-  trackButtonText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 13,
-    color: '#181111',
-    letterSpacing: 0.5,
-  },
-  reorderButton: {
-    flex: 1,
-    flexDirection: 'row',
-    height: 48,
-    borderRadius: 24,
+  activeBadgeIcon: {
     backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 4,
+    borderRadius: 6,
+  },
+  activeBadgeText: {
+    fontFamily: "Inter_800ExtraBold",
+    fontSize: 11,
+    color: "#FFFFFF",
+    letterSpacing: 1,
+  },
+  activeCardBody: {
+    padding: 20,
+  },
+  activeCardMainRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 4,
+  },
+  activeCardStoreName: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 12,
+    color: colors.primary,
+    marginBottom: 2,
+  },
+  activeCardOrderId: {
+    fontFamily: "Outfit_800ExtraBold",
+    fontSize: 22,
+    color: "#181311",
+  },
+  activeCardPrice: {
+    fontFamily: "Outfit_700Bold",
+    fontSize: 20,
+    color: "#181311",
+  },
+  activeCardSummary: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 14,
+    color: "#64748B",
+    marginTop: 4,
+    lineHeight: 20,
+  },
+  activeCardFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+  },
+  activeTimeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  activeTimeText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 13,
+    color: "#64748B",
+  },
+  trackButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
     gap: 8,
     ...Platform.select({
       ios: {
@@ -404,32 +667,143 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
       },
       android: {
-        elevation: 6,
+        elevation: 4,
       },
     }),
   },
-  reorderButtonText: {
-    fontFamily: 'Inter_700Bold',
+  trackButtonText: {
+    fontFamily: "Outfit_700Bold",
+    fontSize: 14,
+    color: "#FFFFFF",
+  },
+  cancelButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEF2F2",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#FEE2E2",
+  },
+  cancelButtonText: {
+    fontFamily: "Outfit_700Bold",
+    fontSize: 14,
+    color: "#EF4444",
+  },
+  pastOrderCard: {
+    flexDirection: "row",
+    padding: 12,
+    backgroundColor: "#FFFFFF",
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 16,
+    alignItems: "center",
+    gap: 16,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 5,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  pastCardImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 12,
+    backgroundColor: "#F1F5F9",
+  },
+  pastCardContent: {
+    flex: 1,
+  },
+  pastCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 2,
+  },
+  pastCardStore: {
+    fontFamily: "Outfit_700Bold",
+    fontSize: 16,
+    color: "#181311",
+  },
+  pastCardDate: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 11,
+    color: "#94A3B8",
+  },
+  pastCardSummary: {
+    fontFamily: "Inter_500Medium",
     fontSize: 13,
-    color: '#FFFFFF',
+    color: "#64748B",
+    marginBottom: 8,
+  },
+  pastCardFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  pastCardPrice: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 14,
+    color: colors.primary,
+  },
+  pastStatusLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  pastStatusLabel: {
+    fontFamily: "Inter_800ExtraBold",
+    fontSize: 10,
     letterSpacing: 0.5,
   },
   emptyContainer: {
-    alignItems: 'center',
-    marginTop: 100,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: 80,
     paddingHorizontal: 40,
   },
+  emptyIconCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: "#F1F5F9",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+  },
   emptyTitle: {
-    fontFamily: 'Outfit_700Bold',
+    fontFamily: "Outfit_700Bold",
     fontSize: 20,
-    color: '#181111',
-    marginTop: 16,
+    color: "#181311",
+    marginBottom: 8,
   },
   emptySubtitle: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-    color: '#896163',
-    marginTop: 8,
-    textAlign: 'center',
+    fontFamily: "Inter_400Regular",
+    fontSize: 15,
+    color: "#64748B",
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  browseBtn: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 16,
+  },
+  browseBtnText: {
+    fontFamily: "Outfit_700Bold",
+    fontSize: 16,
+    color: "#FFFFFF",
   },
 });

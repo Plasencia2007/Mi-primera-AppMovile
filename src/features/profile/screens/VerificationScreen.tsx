@@ -1,30 +1,32 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  TouchableOpacity, 
+import React, { useState, useRef, useEffect } from "react";
+import {
+  StyleSheet,
+  Text,
+  View,
+  TouchableOpacity,
   Platform,
   Dimensions,
   TextInput,
   KeyboardAvoidingView,
-  Alert
-} from 'react-native';
-import { 
-  ChevronLeft, 
-  ShieldCheck
-} from 'lucide-react-native';
-import { colors } from '../../../theme';
+  Alert,
+} from "react-native";
+import { ChevronLeft, ShieldCheck } from "lucide-react-native";
+import { colors } from "../../../theme";
+import { useNotification } from "../../../store/useNotification";
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window");
 
 interface VerificationScreenProps {
   onBack: () => void;
   onSuccess: () => void;
 }
 
-export const VerificationScreen = ({ onBack, onSuccess }: VerificationScreenProps) => {
-  const [code, setCode] = useState(['', '', '', '', '', '']);
+export const VerificationScreen = ({
+  onBack,
+  onSuccess,
+}: VerificationScreenProps) => {
+  const showNotification = useNotification((state) => state.showNotification);
+  const [code, setCode] = useState(["", "", "", "", "", ""]);
   const [timer, setTimer] = useState(59);
   const inputs = useRef<TextInput[]>([]);
 
@@ -38,7 +40,7 @@ export const VerificationScreen = ({ onBack, onSuccess }: VerificationScreenProp
   const handleChangeCode = (text: string, index: number) => {
     if (text.length > 1) {
       // Handle paste
-      const pastedCode = text.slice(0, 6).split('');
+      const pastedCode = text.slice(0, 6).split("");
       const newCode = [...code];
       pastedCode.forEach((digit, i) => {
         if (index + i < 6) newCode[index + i] = digit;
@@ -62,23 +64,27 @@ export const VerificationScreen = ({ onBack, onSuccess }: VerificationScreenProp
   };
 
   const handleKeyPress = (e: any, index: number) => {
-    if (e.nativeEvent.key === 'Backspace' && !code[index] && index > 0) {
+    if (e.nativeEvent.key === "Backspace" && !code[index] && index > 0) {
       inputs.current[index - 1]?.focus();
     }
   };
 
   const handleVerify = () => {
-    if (code.some(c => c === '')) {
-      Alert.alert('Código Incompleto', 'Por favor ingresa los 6 dígitos.');
+    if (code.some((c) => c === "")) {
+      showNotification({
+        type: "warning",
+        title: "Código Incompleto",
+        message: "Por favor ingresa los 6 dígitos.",
+      });
       return;
     }
-    
-    // Simulate verification
-    Alert.alert(
-      '¡Verificación Exitosa!',
-      'Tu cuenta ahora cuenta con doble capa de seguridad.',
-      [{ text: 'Aceptar', onPress: onSuccess }]
-    );
+
+    showNotification({
+      type: "success",
+      title: "¡Verificación Exitosa!",
+      message: "Tu cuenta ahora cuenta con doble capa de seguridad.",
+    });
+    onSuccess();
   };
 
   return (
@@ -96,12 +102,11 @@ export const VerificationScreen = ({ onBack, onSuccess }: VerificationScreenProp
         <View style={{ width: 44 }} />
       </View>
 
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
       >
         <View style={styles.content}>
-          
           {/* Header Section */}
           <View style={styles.textSection}>
             <Text style={styles.title}>VERIFICAR CÓDIGO</Text>
@@ -115,10 +120,12 @@ export const VerificationScreen = ({ onBack, onSuccess }: VerificationScreenProp
             {code.map((digit, index) => (
               <TextInput
                 key={index}
-                ref={ref => { if (ref) inputs.current[index] = ref; }}
+                ref={(ref) => {
+                  if (ref) inputs.current[index] = ref;
+                }}
                 style={[
                   styles.codeInput,
-                  digit ? styles.codeInputActive : null
+                  digit ? styles.codeInputActive : null,
                 ]}
                 value={digit}
                 onChangeText={(text) => handleChangeCode(text, index)}
@@ -131,12 +138,11 @@ export const VerificationScreen = ({ onBack, onSuccess }: VerificationScreenProp
           </View>
 
           {/* Timer */}
-          <TouchableOpacity 
-            disabled={timer > 0}
-            onPress={() => setTimer(59)}
-          >
+          <TouchableOpacity disabled={timer > 0} onPress={() => setTimer(59)}>
             <Text style={[styles.timerText, timer === 0 && styles.timerActive]}>
-              {timer > 0 ? `Reenviar código en 00:${timer.toString().padStart(2, '0')}` : 'Reenviar código'}
+              {timer > 0
+                ? `Reenviar código en 00:${timer.toString().padStart(2, "0")}`
+                : "Reenviar código"}
             </Text>
           </TouchableOpacity>
 
@@ -150,14 +156,13 @@ export const VerificationScreen = ({ onBack, onSuccess }: VerificationScreenProp
           </View>
 
           {/* Primary Button */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.verifyButton}
             activeOpacity={0.9}
             onPress={handleVerify}
           >
             <Text style={styles.verifyButtonText}>VERIFICAR Y ACTIVAR</Text>
           </TouchableOpacity>
-
         </View>
       </KeyboardAvoidingView>
     </View>
@@ -167,32 +172,32 @@ export const VerificationScreen = ({ onBack, onSuccess }: VerificationScreenProp
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F6F6',
+    backgroundColor: "#F8F6F6",
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingTop: Platform.OS === 'ios' ? 44 : 12,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingTop: Platform.OS === "ios" ? 44 : 12,
     paddingBottom: 12,
     paddingHorizontal: 16,
     zIndex: 10,
-    backgroundColor: '#FFFFFF', // To cover blobs if needed, or make transparent
-    justifyContent: 'space-between',
+    backgroundColor: "#FFFFFF", // To cover blobs if needed, or make transparent
+    justifyContent: "space-between",
   },
   backButton: {
     width: 44,
     height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   headerTitle: {
     flex: 1,
-    fontFamily: 'Outfit_700Bold',
+    fontFamily: "Outfit_700Bold",
     fontSize: 14,
-    color: '#181111',
-    textAlign: 'center',
+    color: "#181111",
+    textAlign: "center",
     letterSpacing: 0.5,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
   content: {
     flex: 1,
@@ -201,28 +206,28 @@ const styles = StyleSheet.create({
   },
   textSection: {
     marginBottom: 32,
-    alignItems: 'center',
+    alignItems: "center",
   },
   title: {
-    fontFamily: 'Outfit_700Bold',
+    fontFamily: "Outfit_700Bold",
     fontSize: 24,
-    color: '#181111',
+    color: "#181111",
     marginBottom: 8,
-    textAlign: 'center',
+    textAlign: "center",
     letterSpacing: -0.5,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
   subtitle: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: "Inter_400Regular",
     fontSize: 16,
-    color: '#64748B',
-    textAlign: 'center',
+    color: "#64748B",
+    textAlign: "center",
     lineHeight: 24,
     paddingHorizontal: 16,
   },
   inputContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
     gap: 8,
     marginBottom: 24,
   },
@@ -231,15 +236,15 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E6DBDC',
-    backgroundColor: '#FFFFFF',
-    fontFamily: 'Outfit_600SemiBold',
+    borderColor: "#E6DBDC",
+    backgroundColor: "#FFFFFF",
+    fontFamily: "Outfit_600SemiBold",
     fontSize: 20,
-    color: '#181111',
-    textAlign: 'center',
+    color: "#181111",
+    textAlign: "center",
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: "#000",
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.05,
         shadowRadius: 4,
@@ -254,11 +259,11 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   timerText: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: "Inter_500Medium",
     fontSize: 14,
-    color: '#896163',
-    textAlign: 'center',
-    textDecorationLine: 'underline',
+    color: "#896163",
+    textAlign: "center",
+    textDecorationLine: "underline",
   },
   timerActive: {
     color: colors.primary,
@@ -267,23 +272,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   illustrationContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 40,
   },
   iconCircle: {
     width: 128,
     height: 128,
     borderRadius: 64,
-    backgroundColor: 'rgba(236, 19, 30, 0.05)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(236, 19, 30, 0.05)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   verifyButton: {
     backgroundColor: colors.primary,
     height: 60,
     borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.25,
@@ -292,14 +297,14 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   verifyButtonText: {
-    fontFamily: 'Outfit_700Bold',
+    fontFamily: "Outfit_700Bold",
     fontSize: 16,
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     letterSpacing: 1,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
   blobTop: {
-    position: 'absolute',
+    position: "absolute",
     top: 40,
     right: 40,
     width: 256,
@@ -310,7 +315,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 1.5 }],
   },
   blobBottom: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 40,
     left: 40,
     width: 256,

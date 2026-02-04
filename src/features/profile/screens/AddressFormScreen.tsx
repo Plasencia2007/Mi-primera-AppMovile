@@ -1,34 +1,38 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  ScrollView, 
-  TouchableOpacity, 
+import React, { useState, useEffect, useRef } from "react";
+import {
+  StyleSheet,
+  Text,
+  View,
+  ScrollView,
+  TouchableOpacity,
   TextInput,
   Platform,
   Dimensions,
   KeyboardAvoidingView,
-  Alert
-} from 'react-native';
-import MapWrapper, { Marker, PROVIDER_GOOGLE } from '../../../components/Map/MapWrapper';
-import * as Location from 'expo-location';
-import { 
-  ArrowLeft, 
-  Home, 
-  Map as MapIcon, 
-  StickyNote, 
-  Navigation, 
-  Plus, 
+  Alert,
+} from "react-native";
+import MapWrapper, {
+  Marker,
+  PROVIDER_GOOGLE,
+} from "../../../components/Map/MapWrapper";
+import * as Location from "expo-location";
+import {
+  ArrowLeft,
+  Home,
+  Map as MapIcon,
+  StickyNote,
+  Navigation,
+  Plus,
   Minus,
   MapPin,
   Info,
-  LocateFixed
-} from 'lucide-react-native';
-import { colors, spacing } from '../../../theme';
-import { Address } from '../../../types/address.types';
+  LocateFixed,
+} from "lucide-react-native";
+import { colors, spacing } from "../../../theme";
+import { useNotification } from "../../../store/useNotification";
+import { Address } from "../../../types/address.types";
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window");
 
 interface AddressFormScreenProps {
   onBack: () => void;
@@ -37,13 +41,20 @@ interface AddressFormScreenProps {
   onSelectOnMap: () => void;
 }
 
-export const AddressFormScreen = ({ onBack, addressToEdit, onSave, onSelectOnMap }: AddressFormScreenProps) => {
+export const AddressFormScreen = ({
+  onBack,
+  addressToEdit,
+  onSave,
+  onSelectOnMap,
+}: AddressFormScreenProps) => {
+  const showNotification = useNotification((state) => state.showNotification);
   const [formData, setFormData] = useState({
-    title: addressToEdit?.title || '',
-    street: addressToEdit?.street || '',
-    district: addressToEdit?.district || '',
-    city: addressToEdit?.city || '',
-    reference: addressToEdit?.interior || '' 
+    title: addressToEdit?.title || "",
+    street: addressToEdit?.street || "",
+    district: addressToEdit?.district || "",
+    city: addressToEdit?.city || "",
+    reference: addressToEdit?.interior || "",
+    postalCode: addressToEdit?.postalCode || "",
   });
 
   const [region, setRegion] = useState({
@@ -58,16 +69,25 @@ export const AddressFormScreen = ({ onBack, addressToEdit, onSave, onSelectOnMap
   // Auto-complete fields when addressToEdit updates (e.g. from Map Selection)
   useEffect(() => {
     if (addressToEdit) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
         title: addressToEdit.title || prev.title,
         street: addressToEdit.street || prev.street,
         district: addressToEdit.district || prev.district,
         city: addressToEdit.city || prev.city,
-        reference: addressToEdit.interior || prev.reference
+        reference: addressToEdit.interior || prev.reference,
+        postalCode: addressToEdit.postalCode || prev.postalCode,
       }));
-      
-      // If coordinates are available in a real app, update region here
+
+      if (addressToEdit.latitude && addressToEdit.longitude) {
+        const newReg = {
+          ...region,
+          latitude: addressToEdit.latitude,
+          longitude: addressToEdit.longitude,
+        };
+        setRegion(newReg);
+        mapRef.current?.animateToRegion(newReg, 1000);
+      }
     } else {
       // Auto-detect location for new address
       handleCurrentLocation();
@@ -82,14 +102,22 @@ export const AddressFormScreen = ({ onBack, addressToEdit, onSave, onSelectOnMap
       district: formData.district,
       city: formData.city,
       interior: formData.reference,
+      postalCode: formData.postalCode,
+      latitude: region.latitude,
+      longitude: region.longitude,
     });
   };
 
   const handleCurrentLocation = async () => {
     try {
       let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permiso denegado', 'Necesitamos acceso a tu ubicación para autocompletar la dirección.');
+      if (status !== "granted") {
+        showNotification({
+          type: "warning",
+          title: "Permiso denegado",
+          message:
+            "Necesitamos acceso a tu ubicación para autocompletar la dirección.",
+        });
         return;
       }
 
@@ -100,7 +128,7 @@ export const AddressFormScreen = ({ onBack, addressToEdit, onSave, onSelectOnMap
         latitudeDelta: 0.002,
         longitudeDelta: 0.002,
       };
-      
+
       setRegion(newRegion);
       mapRef.current?.animateToRegion(newRegion, 1000);
 
@@ -112,20 +140,26 @@ export const AddressFormScreen = ({ onBack, addressToEdit, onSave, onSelectOnMap
 
       if (reverseGeocode.length > 0) {
         const addr = reverseGeocode[0];
-        const street = addr.street || addr.name || '';
-        const number = addr.streetNumber ? ` ${addr.streetNumber}` : '';
-        const district = addr.district || addr.subregion || '';
-        const city = addr.city || addr.region || '';
-        
-        setFormData(prev => ({
+        const street = addr.street || addr.name || "";
+        const number = addr.streetNumber ? ` ${addr.streetNumber}` : "";
+        const district = addr.district || addr.subregion || "";
+        const city = addr.city || addr.region || "";
+        const postalCode = addr.postalCode || "";
+
+        setFormData((prev) => ({
           ...prev,
           street: `${street}${number}`.trim(),
           district: district,
           city: city,
+          postalCode: postalCode,
         }));
       }
     } catch (error) {
-      Alert.alert('Error', 'No pudimos obtener tu ubicación actual.');
+      showNotification({
+        type: "error",
+        title: "Error",
+        message: "No pudimos obtener tu ubicación actual.",
+      });
     }
   };
 
@@ -136,29 +170,33 @@ export const AddressFormScreen = ({ onBack, addressToEdit, onSave, onSelectOnMap
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <ArrowLeft size={28} color="#181111" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{addressToEdit ? 'EDITAR DIRECCIÓN' : 'NUEVA DIRECCIÓN'}</Text>
+        <Text style={styles.headerTitle}>
+          {addressToEdit ? "EDITAR DIRECCIÓN" : "NUEVA DIRECCIÓN"}
+        </Text>
         <View style={{ width: 44 }} />
       </View>
 
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
       >
-        <ScrollView 
+        <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
           {/* Map Section */}
           <View style={styles.mapContainer}>
-            <TouchableOpacity 
-              activeOpacity={0.9} 
+            <TouchableOpacity
+              activeOpacity={0.9}
               onPress={onSelectOnMap}
               style={styles.mapFrame}
             >
               <View style={styles.mapMock}>
                 <MapWrapper
                   ref={mapRef}
-                  provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+                  provider={
+                    Platform.OS === "android" ? PROVIDER_GOOGLE : undefined
+                  }
                   style={StyleSheet.absoluteFill}
                   region={region}
                   scrollEnabled={false}
@@ -169,23 +207,37 @@ export const AddressFormScreen = ({ onBack, addressToEdit, onSave, onSelectOnMap
                   <Marker coordinate={region}>
                     <View style={styles.markerContainer}>
                       <View style={styles.markerCircle}>
-                        <MapPin size={24} color={colors.white} fill={colors.white} />
+                        <MapPin
+                          size={24}
+                          color={colors.white}
+                          fill={colors.white}
+                        />
                       </View>
                     </View>
                   </Marker>
                 </MapWrapper>
-                
+
                 {/* Overlay Text */}
-                <View style={[styles.pinOverlay, { backgroundColor: 'rgba(0,0,0,0.05)' }]}>
+                <View
+                  style={[
+                    styles.pinOverlay,
+                    { backgroundColor: "rgba(0,0,0,0.05)" },
+                  ]}
+                >
                   <View style={styles.tapToExpand}>
-                    <Text style={styles.tapToExpandText}>TOCA PARA AJUSTAR</Text>
+                    <Text style={styles.tapToExpandText}>
+                      TOCA PARA AJUSTAR
+                    </Text>
                   </View>
                 </View>
 
                 {/* Map Controls */}
                 <View style={styles.mapControls}>
-                  <TouchableOpacity 
-                    style={[styles.controlBtn, { backgroundColor: colors.primary }]} 
+                  <TouchableOpacity
+                    style={[
+                      styles.controlBtn,
+                      { backgroundColor: colors.primary },
+                    ]}
                     onPress={handleCurrentLocation}
                   >
                     <LocateFixed size={20} color={colors.white} />
@@ -209,12 +261,14 @@ export const AddressFormScreen = ({ onBack, addressToEdit, onSave, onSelectOnMap
               <Text style={styles.label}>Nombre de la ubicación</Text>
               <View style={styles.inputWrapper}>
                 <Home size={20} color="#94A3B8" />
-                <TextInput 
+                <TextInput
                   style={styles.input}
                   placeholder="Ej: Casa, Oficina..."
                   placeholderTextColor="#94A3B8"
                   value={formData.title}
-                  onChangeText={(text) => setFormData({...formData, title: text})}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, title: text })
+                  }
                 />
               </View>
             </View>
@@ -224,27 +278,31 @@ export const AddressFormScreen = ({ onBack, addressToEdit, onSave, onSelectOnMap
               <Text style={styles.label}>Dirección completa</Text>
               <View style={styles.inputWrapper}>
                 <MapIcon size={20} color="#94A3B8" />
-                <TextInput 
+                <TextInput
                   style={styles.input}
                   placeholder="Ingresa tu dirección"
                   placeholderTextColor="#94A3B8"
                   value={formData.street}
-                  onChangeText={(text) => setFormData({...formData, street: text})}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, street: text })
+                  }
                 />
               </View>
             </View>
 
             {/* District & City Row */}
-            <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flexDirection: "row", gap: 12 }}>
               <View style={[styles.inputGroup, { flex: 1 }]}>
                 <Text style={styles.label}>Distrito</Text>
                 <View style={styles.inputWrapper}>
-                  <TextInput 
+                  <TextInput
                     style={styles.input}
                     placeholder="Distrito"
                     placeholderTextColor="#94A3B8"
                     value={formData.district}
-                    onChangeText={(text) => setFormData({...formData, district: text})}
+                    onChangeText={(text) =>
+                      setFormData({ ...formData, district: text })
+                    }
                   />
                 </View>
               </View>
@@ -252,12 +310,14 @@ export const AddressFormScreen = ({ onBack, addressToEdit, onSave, onSelectOnMap
               <View style={[styles.inputGroup, { flex: 1 }]}>
                 <Text style={styles.label}>Provincia</Text>
                 <View style={styles.inputWrapper}>
-                  <TextInput 
+                  <TextInput
                     style={styles.input}
                     placeholder="Ciudad"
                     placeholderTextColor="#94A3B8"
                     value={formData.city}
-                    onChangeText={(text) => setFormData({...formData, city: text})}
+                    onChangeText={(text) =>
+                      setFormData({ ...formData, city: text })
+                    }
                   />
                 </View>
               </View>
@@ -268,12 +328,14 @@ export const AddressFormScreen = ({ onBack, addressToEdit, onSave, onSelectOnMap
               <Text style={styles.label}>Referencia (opcional)</Text>
               <View style={styles.inputWrapper}>
                 <StickyNote size={20} color="#94A3B8" />
-                <TextInput 
+                <TextInput
                   style={styles.input}
                   placeholder="Ej: Portón negro al lado del parque"
                   placeholderTextColor="#94A3B8"
                   value={formData.reference}
-                  onChangeText={(text) => setFormData({...formData, reference: text})}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, reference: text })
+                  }
                 />
               </View>
             </View>
@@ -282,14 +344,14 @@ export const AddressFormScreen = ({ onBack, addressToEdit, onSave, onSelectOnMap
 
         {/* Footer Action */}
         <View style={styles.footer}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.saveBtn}
             onPress={handleSave}
             activeOpacity={0.9}
           >
             <Text style={styles.saveBtnText}>GUARDAR CAMBIOS</Text>
           </TouchableOpacity>
-          <View style={{ height: Platform.OS === 'ios' ? 20 : 10 }} />
+          <View style={{ height: Platform.OS === "ios" ? 20 : 10 }} />
         </View>
       </KeyboardAvoidingView>
     </View>
@@ -299,27 +361,27 @@ export const AddressFormScreen = ({ onBack, addressToEdit, onSave, onSelectOnMap
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F6F6',
+    backgroundColor: "#F8F6F6",
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 8,
     paddingTop: 10,
-    backgroundColor: '#F8F6F6',
+    backgroundColor: "#F8F6F6",
     paddingBottom: 8,
   },
   backButton: {
     width: 48,
     height: 48,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   headerTitle: {
-    fontFamily: 'Outfit_700Bold',
+    fontFamily: "Outfit_700Bold",
     fontSize: 18,
-    color: '#181111',
+    color: "#181111",
     letterSpacing: -0.5,
   },
   scrollContent: {
@@ -331,14 +393,14 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   mapFrame: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 20,
-    overflow: 'hidden',
+    overflow: "hidden",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: "#000",
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.1,
         shadowRadius: 10,
@@ -349,18 +411,18 @@ const styles = StyleSheet.create({
     }),
   },
   mapMock: {
-    width: '100%',
+    width: "100%",
     aspectRatio: 4 / 3,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: "#E5E7EB",
   },
   pinOverlay: {
     ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    pointerEvents: 'none',
+    justifyContent: "center",
+    alignItems: "center",
+    pointerEvents: "none",
   },
   pinContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 32,
   },
   pinCircle: {
@@ -368,10 +430,10 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 24,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: "#FFFFFF",
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: "#000",
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 5,
@@ -385,22 +447,22 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: 'rgba(0,0,0,0.2)',
+    backgroundColor: "rgba(0,0,0,0.2)",
     marginTop: 4,
   },
   mapControls: {
-    position: 'absolute',
+    position: "absolute",
     right: 12,
     bottom: 12,
     gap: 8,
   },
   controlBtn: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     padding: 10,
     borderRadius: 20,
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: "#000",
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
@@ -411,16 +473,16 @@ const styles = StyleSheet.create({
     }),
   },
   mapInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     padding: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     gap: 10,
   },
   mapInfoText: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: "Inter_500Medium",
     fontSize: 14,
-    color: '#181111',
+    color: "#181111",
     flex: 1,
   },
   form: {
@@ -430,41 +492,41 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   label: {
-    fontFamily: 'Outfit_700Bold',
+    fontFamily: "Outfit_700Bold",
     fontSize: 12,
-    color: '#181111',
-    textTransform: 'uppercase',
+    color: "#181111",
+    textTransform: "uppercase",
     letterSpacing: 1,
     opacity: 0.7,
     paddingHorizontal: 8,
   },
   inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
     borderRadius: 30,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     paddingHorizontal: 16,
     height: 56,
   },
   input: {
     flex: 1,
     marginLeft: 12,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: "Inter_400Regular",
     fontSize: 16,
-    color: '#181111',
+    color: "#181111",
   },
   footer: {
     padding: 24,
-    backgroundColor: '#F8F6F6',
+    backgroundColor: "#F8F6F6",
   },
   saveBtn: {
     backgroundColor: colors.primary,
     height: 56,
     borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     ...Platform.select({
       ios: {
         shadowColor: colors.primary,
@@ -478,15 +540,15 @@ const styles = StyleSheet.create({
     }),
   },
   saveBtnText: {
-    fontFamily: 'Outfit_700Bold',
+    fontFamily: "Outfit_700Bold",
     fontSize: 16,
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     letterSpacing: 1,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
   markerContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     width: 44,
     height: 44,
   },
@@ -495,10 +557,10 @@ const styles = StyleSheet.create({
     padding: 6,
     borderRadius: 22,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: "#FFFFFF",
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: "#000",
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 5,
@@ -509,15 +571,15 @@ const styles = StyleSheet.create({
     }),
   },
   tapToExpand: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(236, 19, 30, 0.3)',
+    borderColor: "rgba(236, 19, 30, 0.3)",
   },
   tapToExpandText: {
-    fontFamily: 'Outfit_800ExtraBold',
+    fontFamily: "Outfit_800ExtraBold",
     fontSize: 10,
     color: colors.primary,
     letterSpacing: 1,

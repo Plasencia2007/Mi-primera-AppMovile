@@ -7,7 +7,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
-  Alert,
   ImageBackground,
   TextInput,
   StatusBar,
@@ -20,9 +19,14 @@ import * as z from "zod";
 
 import { USER_MOCKS } from "../../../data/mocks/user.mocks";
 import { LinearGradient } from "expo-linear-gradient";
+import { supabase } from "../../../services/supabase";
+import { useNotification } from "../../../store/useNotification";
 
 const loginSchema = z.object({
-  email: z.string().email("Ingresa un correo válido").min(1, "El correo es requerido"),
+  email: z
+    .string()
+    .email("Ingresa un correo válido")
+    .min(1, "El correo es requerido"),
   password: z.string().min(6, "Mínimo 6 caracteres"),
 });
 
@@ -36,6 +40,7 @@ interface LoginScreenProps {
 export const LoginScreen = ({ onLogin, onGoToRegister }: LoginScreenProps) => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const showNotification = useNotification((state) => state.showNotification);
 
   const {
     control,
@@ -46,26 +51,42 @@ export const LoginScreen = ({ onLogin, onGoToRegister }: LoginScreenProps) => {
     defaultValues: { email: "", password: "" },
   });
 
-  const onSubmit = (data: LoginForm) => {
+  const onSubmit = async (data: LoginForm) => {
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      const mockUser = USER_MOCKS.profile;
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: data.email,
+        password: data.password,
+      });
 
-      if (
-        (data.email === mockUser.email && data.password === mockUser.password) ||
-        (data.email === "demo@user.com" && data.password === "123456")
-      ) {
-        onLogin();
-      } else {
-        Alert.alert("Error", "Credenciales incorrectas.", [{ text: "OK" }]);
+      if (error) {
+        showNotification({
+          type: "error",
+          title: "Error de Acceso",
+          message: error.message,
+        });
+        return;
       }
-    }, 900);
+
+      onLogin();
+    } catch (err) {
+      showNotification({
+        type: "error",
+        title: "Error",
+        message: "Ocurrió un error inesperado.",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <StatusBar
+        barStyle="light-content"
+        translucent
+        backgroundColor="transparent"
+      />
 
       {/* 1) IMAGEN DE FONDO "NUCLEAR" 
           Posición absoluta con dimensiones exageradas y márgenes negativos
@@ -76,7 +97,7 @@ export const LoginScreen = ({ onLogin, onGoToRegister }: LoginScreenProps) => {
         style={styles.forceFullScreenImage}
         resizeMode="cover"
       />
-      
+
       {/* 2) Overlay Negro (También oversized) */}
       <View style={styles.overlay} />
 
@@ -90,7 +111,9 @@ export const LoginScreen = ({ onLogin, onGoToRegister }: LoginScreenProps) => {
             {/* Header Texts */}
             <View style={styles.header}>
               <Text style={styles.headerTitle}>Bienvenido</Text>
-              <Text style={styles.headerSubtitle}>Ingredientes frescos, sabor auténtico.</Text>
+              <Text style={styles.headerSubtitle}>
+                Ingredientes frescos, sabor auténtico.
+              </Text>
             </View>
 
             {/* White Card */}
@@ -162,11 +185,15 @@ export const LoginScreen = ({ onLogin, onGoToRegister }: LoginScreenProps) => {
                   </View>
 
                   {!!errors.password?.message && (
-                    <Text style={styles.errorText}>{errors.password.message}</Text>
+                    <Text style={styles.errorText}>
+                      {errors.password.message}
+                    </Text>
                   )}
 
                   <TouchableOpacity style={styles.forgotPassword}>
-                    <Text style={styles.forgotText}>¿Olvidaste tu contraseña?</Text>
+                    <Text style={styles.forgotText}>
+                      ¿Olvidaste tu contraseña?
+                    </Text>
                   </TouchableOpacity>
                 </View>
 
@@ -198,17 +225,33 @@ export const LoginScreen = ({ onLogin, onGoToRegister }: LoginScreenProps) => {
 
                 {/* Social Buttons */}
                 <View style={styles.socialContainer}>
-                  <TouchableOpacity style={styles.socialBtn} activeOpacity={0.85}>
+                  <TouchableOpacity
+                    style={styles.socialBtn}
+                    activeOpacity={0.85}
+                  >
                     <Image
-                      source={{ uri: "https://cdn-icons-png.flaticon.com/512/300/300221.png" }}
+                      source={{
+                        uri: "https://cdn-icons-png.flaticon.com/512/300/300221.png",
+                      }}
                       style={{ width: 22, height: 22 }}
                     />
                     <Text style={styles.socialText}>Google</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity style={styles.socialBtn} activeOpacity={0.85}>
+                  <TouchableOpacity
+                    style={styles.socialBtn}
+                    activeOpacity={0.85}
+                  >
                     <View style={styles.facebookIcon}>
-                      <Text style={{ color: "#fff", fontSize: 18, fontWeight: "bold" }}>f</Text>
+                      <Text
+                        style={{
+                          color: "#fff",
+                          fontSize: 18,
+                          fontWeight: "bold",
+                        }}
+                      >
+                        f
+                      </Text>
                     </View>
                     <Text style={styles.socialText}>Facebook</Text>
                   </TouchableOpacity>
@@ -217,7 +260,10 @@ export const LoginScreen = ({ onLogin, onGoToRegister }: LoginScreenProps) => {
                 {/* Sign Up */}
                 <View style={styles.footer}>
                   <Text style={styles.footerText}>¿Eres nuevo aquí? </Text>
-                  <TouchableOpacity onPress={onGoToRegister} activeOpacity={0.85}>
+                  <TouchableOpacity
+                    onPress={onGoToRegister}
+                    activeOpacity={0.85}
+                  >
                     <Text style={styles.signupLink}>Crea una cuenta</Text>
                   </TouchableOpacity>
                 </View>
@@ -236,23 +282,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#000",
   },
-  
+
   // SOLUCIÓN FUERZA BRUTA:
   forceFullScreenImage: {
-    position: 'absolute',
-    top: '-10%',
-    left: '-10%',
-    width: '120%',
-    height: '120%',
+    position: "absolute",
+    top: "-10%",
+    left: "-10%",
+    width: "120%",
+    height: "120%",
     // zIndex removed (natural order)
   },
 
   overlay: {
-    position: 'absolute',
-    top: '-10%',
-    left: '-10%',
-    width: '120%',
-    height: '120%',
+    position: "absolute",
+    top: "-10%",
+    left: "-10%",
+    width: "120%",
+    height: "120%",
     backgroundColor: "#000",
     opacity: 0.55,
     // zIndex removed

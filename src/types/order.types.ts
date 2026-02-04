@@ -3,6 +3,7 @@ export interface OrderItem {
   name: string;
   quantity: number;
   price: string;
+  image?: any;
 }
 
 export type OrderStatus = 'Entregado' | 'En camino' | 'Cancelado' | 'Pendiente';
@@ -13,4 +14,5 @@ export interface Order {
   total: string;
   status: OrderStatus;
   items: OrderItem[];
+  image?: any;
 }

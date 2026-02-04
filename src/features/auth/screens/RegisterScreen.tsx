@@ -1,31 +1,40 @@
-import React, { useState } from 'react';
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  TouchableOpacity, 
-  KeyboardAvoidingView, 
+import React, { useState } from "react";
+import {
+  StyleSheet,
+  Text,
+  View,
+  TouchableOpacity,
+  KeyboardAvoidingView,
   Platform,
   ScrollView,
-} from 'react-native';
-import { Mail, Lock, User, ChevronLeft } from 'lucide-react-native';
-import { useForm, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
+} from "react-native";
+import { Mail, Lock, User, ChevronLeft } from "lucide-react-native";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 
-import { colors, spacing } from '../../../theme';
-import { Input } from '../../../components/ui/Input';
-import { Button } from '../../../components/ui/Button';
+import { colors, spacing } from "../../../theme";
+import { Input } from "../../../components/ui/Input";
+import { Button } from "../../../components/ui/Button";
 
-const registerSchema = z.object({
-  name: z.string().min(3, 'Mínimo 3 caracteres'),
-  email: z.string().email('Ingresa un correo válido'),
-  password: z.string().min(6, 'Mínimo 6 caracteres'),
-  confirmPassword: z.string(),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Las contraseñas no coinciden",
-  path: ["confirmPassword"],
-});
+import { supabase } from "../../../services/supabase";
+import { useNotification } from "../../../store/useNotification";
+
+const registerSchema = z
+  .object({
+    name: z.string().min(3, "Mínimo 3 caracteres"),
+    email: z.string().email("Ingresa un correo válido"),
+    dni: z.string().min(8, "DNI inválido").max(8, "DNI inválido"),
+    phone: z.string().min(9, "Teléfono inválido"),
+    province: z.string().min(2, "Selecciona una provincia"),
+    district: z.string().min(2, "Selecciona un distrito"),
+    password: z.string().min(6, "Mínimo 6 caracteres"),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Las contraseñas no coinciden",
+    path: ["confirmPassword"],
+  });
 
 type RegisterForm = z.infer<typeof registerSchema>;
 
@@ -34,47 +43,94 @@ interface RegisterScreenProps {
   onGoToLogin: () => void;
 }
 
-export const RegisterScreen = ({ onRegister, onGoToLogin }: RegisterScreenProps) => {
+export const RegisterScreen = ({
+  onRegister,
+  onGoToLogin,
+}: RegisterScreenProps) => {
   const [loading, setLoading] = useState(false);
+  const showNotification = useNotification((state) => state.showNotification);
 
-  const { control, handleSubmit, formState: { errors } } = useForm<RegisterForm>({
+  const {
+    control,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
-      name: '',
-      email: '',
-      password: '',
-      confirmPassword: '',
-    }
+      name: "",
+      email: "",
+      dni: "",
+      phone: "",
+      province: "",
+      district: "",
+      password: "",
+      confirmPassword: "",
+    },
   });
 
-  const onSubmit = (data: RegisterForm) => {
+  const onSubmit = async (data: RegisterForm) => {
     setLoading(true);
-    // Simular registro
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      // 1. Sign up user with ALL metadata
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: data.email,
+        password: data.password,
+        options: {
+          data: {
+            full_name: data.name,
+            dni: data.dni,
+            phone: data.phone,
+            province: data.province,
+            district: data.district,
+          },
+        },
+      });
+
+      if (authError) {
+        showNotification({
+          type: "error",
+          title: "Error de Registro",
+          message: authError.message,
+        });
+        return;
+      }
+
+      showNotification({
+        type: "success",
+        title: "¡Bienvenido!",
+        message:
+          "Tu cuenta ha sido creada con éxito. Ya puedes disfrutar de la app.",
+      });
       onRegister();
-    }, 1500);
+    } catch (err) {
+      showNotification({
+        type: "error",
+        title: "Error",
+        message: "Ocurrió un error inesperado durante el registro.",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.container}
     >
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <TouchableOpacity 
-          onPress={onGoToLogin} 
-          style={styles.backButton}
-        >
+        <TouchableOpacity onPress={onGoToLogin} style={styles.backButton}>
           <ChevronLeft size={28} color={colors.text} />
         </TouchableOpacity>
 
         <View style={styles.header}>
           <Text style={styles.title}>Crea tu cuenta</Text>
-          <Text style={styles.subtitle}>Únete a la mejor experiencia gourmet</Text>
+          <Text style={styles.subtitle}>
+            Únete a la mejor experiencia gourmet
+          </Text>
         </View>
 
         <View style={styles.form}>
@@ -95,6 +151,46 @@ export const RegisterScreen = ({ onRegister, onGoToLogin }: RegisterScreenProps)
             )}
           />
 
+          <View style={styles.row}>
+            <View style={{ flex: 1, marginRight: 10 }}>
+              <Controller
+                control={control}
+                name="dni"
+                render={({ field: { onChange, onBlur, value, ref } }) => (
+                  <Input
+                    ref={ref}
+                    label="DNI"
+                    placeholder="12345678"
+                    value={value}
+                    onBlur={onBlur}
+                    onChangeText={onChange}
+                    keyboardType="numeric"
+                    maxLength={8}
+                    error={errors.dni?.message}
+                  />
+                )}
+              />
+            </View>
+            <View style={{ flex: 1.5 }}>
+              <Controller
+                control={control}
+                name="phone"
+                render={({ field: { onChange, onBlur, value, ref } }) => (
+                  <Input
+                    ref={ref}
+                    label="Teléfono"
+                    placeholder="987654321"
+                    value={value}
+                    onBlur={onBlur}
+                    onChangeText={onChange}
+                    keyboardType="phone-pad"
+                    error={errors.phone?.message}
+                  />
+                )}
+              />
+            </View>
+          </View>
+
           <Controller
             control={control}
             name="email"
@@ -113,6 +209,43 @@ export const RegisterScreen = ({ onRegister, onGoToLogin }: RegisterScreenProps)
               />
             )}
           />
+
+          <View style={styles.row}>
+            <View style={{ flex: 1, marginRight: 10 }}>
+              <Controller
+                control={control}
+                name="province"
+                render={({ field: { onChange, onBlur, value, ref } }) => (
+                  <Input
+                    ref={ref}
+                    label="Provincia"
+                    placeholder="Lima"
+                    value={value}
+                    onBlur={onBlur}
+                    onChangeText={onChange}
+                    error={errors.province?.message}
+                  />
+                )}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Controller
+                control={control}
+                name="district"
+                render={({ field: { onChange, onBlur, value, ref } }) => (
+                  <Input
+                    ref={ref}
+                    label="Distrito"
+                    placeholder="Miraflores"
+                    value={value}
+                    onBlur={onBlur}
+                    onChangeText={onChange}
+                    error={errors.district?.message}
+                  />
+                )}
+              />
+            </View>
+          </View>
 
           <Controller
             control={control}
@@ -150,9 +283,9 @@ export const RegisterScreen = ({ onRegister, onGoToLogin }: RegisterScreenProps)
             )}
           />
 
-          <Button 
-            title="Registrarse" 
-            onPress={handleSubmit(onSubmit)} 
+          <Button
+            title="Registrarse"
+            onPress={handleSubmit(onSubmit)}
             loading={loading}
             style={styles.registerButton}
           />
@@ -188,18 +321,23 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   title: {
-    fontFamily: 'Outfit_700Bold',
+    fontFamily: "Outfit_700Bold",
     fontSize: 28,
     color: colors.text,
   },
   subtitle: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: "Inter_400Regular",
     fontSize: 16,
     color: colors.textSecondary,
     marginTop: 8,
   },
   form: {
-    width: '100%',
+    width: "100%",
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    width: "100%",
   },
   registerButton: {
     marginTop: 20,
@@ -216,17 +354,17 @@ const styles = StyleSheet.create({
     }),
   },
   footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
     marginTop: 32,
   },
   footerText: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: "Inter_400Regular",
     fontSize: 14,
     color: colors.textSecondary,
   },
   loginLink: {
-    fontFamily: 'Outfit_600SemiBold',
+    fontFamily: "Outfit_600SemiBold",
     fontSize: 14,
     color: colors.primary,
   },
