@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 import {
   StyleSheet,
   Text,
@@ -10,12 +10,12 @@ import {
   Platform,
   Animated,
   Dimensions,
-} from 'react-native';
-import { X, ShoppingBag, Trash2, Plus, Minus } from 'lucide-react-native';
-import { colors, spacing } from '../../theme';
-import { useCart } from '../../features/cart/store/useCart';
+} from "react-native";
+import { X, ShoppingBag, Trash2, Plus, Minus } from "lucide-react-native";
+import { colors, spacing } from "../../theme";
+import { useCart } from "../../features/cart/store/useCart";
 
-const { width, height } = Dimensions.get('window');
+const { width, height } = Dimensions.get("window");
 
 interface CartDrawerProps {
   visible: boolean;
@@ -23,7 +23,11 @@ interface CartDrawerProps {
   onViewFullCart: () => void;
 }
 
-export const CartDrawer = ({ visible, onClose, onViewFullCart }: CartDrawerProps) => {
+export const CartDrawer = ({
+  visible,
+  onClose,
+  onViewFullCart,
+}: CartDrawerProps) => {
   const items = useCart((state) => state.items);
   const updateQuantity = useCart((state) => state.updateQuantity);
   const removeItem = useCart((state) => state.removeItem);
@@ -57,13 +61,13 @@ export const CartDrawer = ({ visible, onClose, onViewFullCart }: CartDrawerProps
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
-        <TouchableOpacity 
-          style={styles.backdrop} 
-          activeOpacity={1} 
+        <TouchableOpacity
+          style={styles.backdrop}
+          activeOpacity={1}
           onPress={onClose}
         />
-        
-        <Animated.View 
+
+        <Animated.View
           style={[
             styles.drawer,
             {
@@ -80,7 +84,8 @@ export const CartDrawer = ({ visible, onClose, onViewFullCart }: CartDrawerProps
               <View>
                 <Text style={styles.headerTitle}>Mi Carrito</Text>
                 <Text style={styles.headerSubtitle}>
-                  {getItemCount()} {getItemCount() === 1 ? 'producto' : 'productos'}
+                  {getItemCount()}{" "}
+                  {getItemCount() === 1 ? "producto" : "productos"}
                 </Text>
               </View>
             </View>
@@ -90,14 +95,18 @@ export const CartDrawer = ({ visible, onClose, onViewFullCart }: CartDrawerProps
           </View>
 
           {/* Cart Items */}
-          <ScrollView 
+          <ScrollView
             style={styles.itemsContainer}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.itemsContent}
           >
             {items.length === 0 ? (
               <View style={styles.emptyState}>
-                <ShoppingBag size={64} color={colors.textSecondary} strokeWidth={1.5} />
+                <ShoppingBag
+                  size={64}
+                  color={colors.textSecondary}
+                  strokeWidth={1.5}
+                />
                 <Text style={styles.emptyTitle}>Tu carrito está vacío</Text>
                 <Text style={styles.emptySubtitle}>
                   Agrega productos para comenzar tu pedido
@@ -105,49 +114,79 @@ export const CartDrawer = ({ visible, onClose, onViewFullCart }: CartDrawerProps
               </View>
             ) : (
               items.map((item) => {
-                const basePrice = parseFloat(item.price.replace('S/ ', ''));
-                const extrasPrice = item.extras?.reduce((acc, extra) => {
-                  return acc + parseFloat(extra.price.replace('+ S/ ', '').replace('+S/', '').replace('+', '').replace('S/', ''));
-                }, 0) || 0;
+                const basePrice = parseFloat(item.price.replace("S/ ", ""));
+                const extrasPrice =
+                  item.extras?.reduce((acc, extra) => {
+                    return (
+                      acc +
+                      parseFloat(
+                        extra.price
+                          .replace("+ S/ ", "")
+                          .replace("+S/", "")
+                          .replace("+", "")
+                          .replace("S/", ""),
+                      )
+                    );
+                  }, 0) || 0;
                 const itemTotal = (basePrice + extrasPrice) * item.quantity;
 
                 return (
                   <View key={item.cartId} style={styles.cartItem}>
-                    <Image source={{ uri: item.image }} style={styles.itemImage} />
-                    
+                    <Image source={item.image} style={styles.itemImage} />
+
                     <View style={styles.itemDetails}>
                       <Text style={styles.itemName} numberOfLines={2}>
                         {item.name}
                       </Text>
-                      
+
                       {item.extras && item.extras.length > 0 && (
                         <View style={styles.extrasContainer}>
                           {item.extras.map((extra, idx) => (
-                            <Text key={idx} style={styles.extraText} numberOfLines={1}>
+                            <Text
+                              key={idx}
+                              style={styles.extraText}
+                              numberOfLines={1}
+                            >
                               + {extra.name}
                             </Text>
                           ))}
                         </View>
                       )}
-                      
+
                       <View style={styles.itemFooter}>
-                        <Text style={styles.itemPrice}>S/ {itemTotal.toFixed(2)}</Text>
-                        
+                        <Text style={styles.itemPrice}>
+                          S/ {itemTotal.toFixed(2)}
+                        </Text>
+
                         <View style={styles.quantityControls}>
                           <TouchableOpacity
-                            onPress={() => updateQuantity(item.cartId, item.quantity - 1)}
+                            onPress={() =>
+                              updateQuantity(item.cartId, item.quantity - 1)
+                            }
                             style={styles.quantityButton}
                           >
-                            <Minus size={16} color={colors.primary} strokeWidth={3} />
+                            <Minus
+                              size={16}
+                              color={colors.primary}
+                              strokeWidth={3}
+                            />
                           </TouchableOpacity>
-                          
-                          <Text style={styles.quantityText}>{item.quantity}</Text>
-                          
+
+                          <Text style={styles.quantityText}>
+                            {item.quantity}
+                          </Text>
+
                           <TouchableOpacity
-                            onPress={() => updateQuantity(item.cartId, item.quantity + 1)}
+                            onPress={() =>
+                              updateQuantity(item.cartId, item.quantity + 1)
+                            }
                             style={styles.quantityButton}
                           >
-                            <Plus size={16} color={colors.primary} strokeWidth={3} />
+                            <Plus
+                              size={16}
+                              color={colors.primary}
+                              strokeWidth={3}
+                            />
                           </TouchableOpacity>
                         </View>
                       </View>
@@ -170,9 +209,11 @@ export const CartDrawer = ({ visible, onClose, onViewFullCart }: CartDrawerProps
             <View style={styles.footer}>
               <View style={styles.totalContainer}>
                 <Text style={styles.totalLabel}>Total</Text>
-                <Text style={styles.totalAmount}>S/ {getTotal().toFixed(2)}</Text>
+                <Text style={styles.totalAmount}>
+                  S/ {getTotal().toFixed(2)}
+                </Text>
               </View>
-              
+
               <TouchableOpacity
                 style={styles.checkoutButton}
                 onPress={() => {
@@ -181,7 +222,9 @@ export const CartDrawer = ({ visible, onClose, onViewFullCart }: CartDrawerProps
                 }}
                 activeOpacity={0.9}
               >
-                <Text style={styles.checkoutButtonText}>Ver Carrito Completo</Text>
+                <Text style={styles.checkoutButtonText}>
+                  Ver Carrito Completo
+                </Text>
               </TouchableOpacity>
             </View>
           )}
@@ -194,13 +237,13 @@ export const CartDrawer = ({ visible, onClose, onViewFullCart }: CartDrawerProps
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
   },
   drawer: {
-    position: 'absolute',
+    position: "absolute",
     right: 0,
     top: 0,
     bottom: 0,
@@ -209,7 +252,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: "#000",
         shadowOffset: { width: -4, height: 0 },
         shadowOpacity: 0.15,
         shadowRadius: 12,
@@ -220,35 +263,35 @@ const styles = StyleSheet.create({
     }),
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 60 : 20,
+    paddingTop: Platform.OS === "ios" ? 60 : 20,
     paddingBottom: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F3F5',
+    borderBottomColor: "#F1F3F5",
   },
   headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   iconWrapper: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: colors.primary + '10',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: colors.primary + "10",
+    justifyContent: "center",
+    alignItems: "center",
     marginRight: 12,
   },
   headerTitle: {
-    fontFamily: 'Outfit_700Bold',
+    fontFamily: "Outfit_700Bold",
     fontSize: 20,
     color: colors.text,
   },
   headerSubtitle: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: "Inter_400Regular",
     fontSize: 13,
     color: colors.textSecondary,
     marginTop: 2,
@@ -256,8 +299,8 @@ const styles = StyleSheet.create({
   closeButton: {
     width: 40,
     height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   itemsContainer: {
     flex: 1,
@@ -267,31 +310,31 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     paddingVertical: 80,
   },
   emptyTitle: {
-    fontFamily: 'Outfit_700Bold',
+    fontFamily: "Outfit_700Bold",
     fontSize: 18,
     color: colors.text,
     marginTop: 16,
   },
   emptySubtitle: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: "Inter_400Regular",
     fontSize: 14,
     color: colors.textSecondary,
     marginTop: 8,
-    textAlign: 'center',
+    textAlign: "center",
     paddingHorizontal: 40,
   },
   cartItem: {
-    flexDirection: 'row',
-    backgroundColor: '#F8F9FA',
+    flexDirection: "row",
+    backgroundColor: "#F8F9FA",
     borderRadius: 16,
     padding: 12,
     marginBottom: 12,
-    position: 'relative',
+    position: "relative",
   },
   itemImage: {
     width: 80,
@@ -302,10 +345,10 @@ const styles = StyleSheet.create({
   itemDetails: {
     flex: 1,
     marginLeft: 12,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
   },
   itemName: {
-    fontFamily: 'Outfit_600SemiBold',
+    fontFamily: "Outfit_600SemiBold",
     fontSize: 15,
     color: colors.text,
     marginBottom: 4,
@@ -314,24 +357,24 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   extraText: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: "Inter_400Regular",
     fontSize: 12,
     color: colors.textSecondary,
     marginTop: 2,
   },
   itemFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   itemPrice: {
-    fontFamily: 'Outfit_700Bold',
+    fontFamily: "Outfit_700Bold",
     fontSize: 16,
     color: colors.primary,
   },
   quantityControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: colors.white,
     borderRadius: 20,
     paddingHorizontal: 4,
@@ -341,49 +384,49 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: colors.primary + '10',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: colors.primary + "10",
+    justifyContent: "center",
+    alignItems: "center",
   },
   quantityText: {
-    fontFamily: 'Outfit_700Bold',
+    fontFamily: "Outfit_700Bold",
     fontSize: 14,
     color: colors.text,
     marginHorizontal: 12,
     minWidth: 20,
-    textAlign: 'center',
+    textAlign: "center",
   },
   deleteButton: {
-    position: 'absolute',
+    position: "absolute",
     top: 8,
     right: 8,
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#FEE2E2',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#FEE2E2",
+    justifyContent: "center",
+    alignItems: "center",
   },
   footer: {
     padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    paddingBottom: Platform.OS === "ios" ? 34 : 20,
     borderTopWidth: 1,
-    borderTopColor: '#F1F3F5',
+    borderTopColor: "#F1F3F5",
     backgroundColor: colors.white,
   },
   totalContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 16,
   },
   totalLabel: {
-    fontFamily: 'Outfit_600SemiBold',
+    fontFamily: "Outfit_600SemiBold",
     fontSize: 16,
     color: colors.textSecondary,
   },
   totalAmount: {
-    fontFamily: 'Outfit_700Bold',
+    fontFamily: "Outfit_700Bold",
     fontSize: 24,
     color: colors.text,
   },
@@ -391,8 +434,8 @@ const styles = StyleSheet.create({
     height: 56,
     backgroundColor: colors.primary,
     borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     ...Platform.select({
       ios: {
         shadowColor: colors.primary,
@@ -406,7 +449,7 @@ const styles = StyleSheet.create({
     }),
   },
   checkoutButtonText: {
-    fontFamily: 'Outfit_700Bold',
+    fontFamily: "Outfit_700Bold",
     fontSize: 16,
     color: colors.white,
   },
