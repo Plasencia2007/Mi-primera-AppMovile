@@ -45,6 +45,7 @@ interface ProfileScreenProps {
   onNavigateToActiveOrders: () => void;
   onNavigateToScheduled: () => void;
   onDeleteAccount: () => void;
+  onNavigateToAdmin: () => void;
 }
 
 export const ProfileScreen = ({
@@ -57,6 +58,7 @@ export const ProfileScreen = ({
   onNavigateToActiveOrders,
   onNavigateToScheduled,
   onDeleteAccount,
+  onNavigateToAdmin,
 }: ProfileScreenProps) => {
   const { profile, getInitials, updateAvatar } = useUser();
 
@@ -319,6 +321,24 @@ export const ProfileScreen = ({
             />
           </View>
         </View>
+
+        {/* Administration Section */}
+        {profile.role === "admin" && (
+          <View style={styles.section}>
+            <Text style={styles.sectionHeader}>ADMINISTRACIÓN</Text>
+            <View style={styles.optionsContainer}>
+              <ProfileOption
+                icon={Settings}
+                title="Panel de Control Admin"
+                subtitle="Gestionar pedidos y estadísticas"
+                iconBgColor="#FFF1F2"
+                iconColor={colors.primary}
+                isLast
+                onPress={onNavigateToAdmin}
+              />
+            </View>
+          </View>
+        )}
 
         {/* Advanced Section */}
         <View style={styles.section}>

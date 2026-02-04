@@ -4,6 +4,7 @@ export interface UserProfile {
   email: string;
   avatar: any | null;
   points: number;
+  role: 'admin' | 'customer'; // Nuevo
   phone?: string;
   dni?: string;
   province?: string;

@@ -86,6 +86,7 @@ export default function App() {
           email: email,
           avatar: data.avatar_url ? { uri: data.avatar_url } : null,
           points: 0,
+          role: data.role || "customer",
           phone: data.phone || "",
           dni: data.dni || "",
           province: data.province || "",
@@ -125,7 +126,14 @@ export default function App() {
       } else {
         setIsAuthenticated(false);
         setCurrentScreen("LOGIN");
-        setProfile({ id: "", name: "", email: "", avatar: null, points: 0 });
+        setProfile({
+          id: "",
+          name: "",
+          email: "",
+          avatar: null,
+          points: 0,
+          role: "customer",
+        });
         resetToMain();
       }
     });

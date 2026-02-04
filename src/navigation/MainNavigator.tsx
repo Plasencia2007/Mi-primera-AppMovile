@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text } from "react-native";
+import { View, Text, TouchableOpacity } from "react-native";
 import { useNavigationStore } from "../store/useNavigation";
 import { useUser } from "../features/profile/store/useUser";
 import { useAddresses } from "../features/profile/store/useAddresses";
@@ -29,6 +29,10 @@ import { HelpCenterScreen } from "../features/profile/screens/HelpCenterScreen";
 import { OffersScreen } from "../features/catalog/screens/OffersScreen";
 import { ScheduledOrdersScreen } from "../features/profile/screens/ScheduledOrdersScreen";
 import { ActiveOrdersScreen } from "../features/profile/screens/ActiveOrdersScreen";
+
+// Admin
+import { AdminDashboard } from "../features/admin/screens/AdminDashboard";
+import { AdminOrdersScreen } from "../features/admin/screens/AdminOrdersScreen";
 
 interface MainNavigatorProps {
   handleLogout: () => Promise<void>;
@@ -351,6 +355,59 @@ export const MainNavigator = ({
               }}
             />
           );
+        case "ADMIN_DASHBOARD":
+          return (
+            <AdminDashboard
+              onSelectOrder={() => setProfileSubScreen("ADMIN_ORDERS")}
+              onViewAllOrders={() => setProfileSubScreen("ADMIN_ORDERS")}
+              onNavigateToProducts={() => setProfileSubScreen("ADMIN_PRODUCTS")}
+              onNavigateToOffers={() => setProfileSubScreen("ADMIN_OFFERS")}
+            />
+          );
+        case "ADMIN_ORDERS":
+          return (
+            <AdminOrdersScreen
+              onBack={() => setProfileSubScreen("ADMIN_DASHBOARD")}
+            />
+          );
+        case "ADMIN_PRODUCTS":
+          return (
+            <View
+              style={{
+                flex: 1,
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <Text>Pronto galería de productos...</Text>
+              <TouchableOpacity
+                onPress={() => setProfileSubScreen("ADMIN_DASHBOARD")}
+              >
+                <Text style={{ color: colors.primary, marginTop: 20 }}>
+                  Volver
+                </Text>
+              </TouchableOpacity>
+            </View>
+          );
+        case "ADMIN_OFFERS":
+          return (
+            <View
+              style={{
+                flex: 1,
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <Text>Pronto panel de ofertas...</Text>
+              <TouchableOpacity
+                onPress={() => setProfileSubScreen("ADMIN_DASHBOARD")}
+              >
+                <Text style={{ color: colors.primary, marginTop: 20 }}>
+                  Volver
+                </Text>
+              </TouchableOpacity>
+            </View>
+          );
         default:
           return (
             <ProfileScreen
@@ -367,6 +424,7 @@ export const MainNavigator = ({
               onNavigateToScheduled={() =>
                 setProfileSubScreen("SCHEDULED_ORDERS")
               }
+              onNavigateToAdmin={() => setProfileSubScreen("ADMIN_DASHBOARD")}
             />
           );
       }

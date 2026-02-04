@@ -8,6 +8,7 @@ export const useUser = create<UserState>((set, get) => ({
     email: '',
     avatar: null,
     points: 0,
+    role: 'customer',
   },
   
   setProfile: (profile: UserProfile) => {

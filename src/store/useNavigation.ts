@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { TabType } from '../components/layout/BottomNav';
 
-export type ProfileSubScreen = 
+export type ProfileSubScreen =
   | "ROOT"
   | "ORDERS"
   | "ADDRESSES"
@@ -17,7 +17,11 @@ export type ProfileSubScreen =
   | "HELP_CENTER"
   | "TRACKING"
   | "SCHEDULED_ORDERS"
-  | "ACTIVE_ORDERS";
+  | "ACTIVE_ORDERS"
+  | "ADMIN_DASHBOARD"
+  | "ADMIN_ORDERS"
+  | "ADMIN_PRODUCTS"
+  | "ADMIN_OFFERS";
 
 interface NavigationState {
   currentScreen: "LOGIN" | "REGISTER" | "MAIN";
